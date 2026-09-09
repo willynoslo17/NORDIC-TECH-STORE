@@ -35,13 +35,16 @@
       const response = await fetch(url, { signal: timeout.signal });
       if (!response.ok) throw new Error("CJ unavailable");
       const payload = await response.json();
-      const products = rows(payload).map((item, index) => ({
+      const products = rows(payload)
+        .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
+        .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
+        .map((item, index) => ({
         id: 10001 + index,
         name: item.nameEn || item.name || "CJ product",
         cat: config.category,
         base: price(item.sellPrice || item.nowPrice),
         v: "v" + ((index % 4) + 1),
-        tag: "CJ Dropshipping",
+        tag: "CJ Selected",
         image: item.bigImage || item.image || "",
         sku: item.sku || ""
       })).filter(item => item.base > 0).slice(0, 20);
