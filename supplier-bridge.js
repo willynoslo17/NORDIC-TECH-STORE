@@ -63,7 +63,7 @@
     note.content = "authorized-manual-catalog";
     document.head.appendChild(note);
     const badge = document.createElement("div");
-    badge.textContent = "German Drop · tienda autorizada";
+    badge.textContent = "German Drop · abastecimiento activo";
     badge.style.cssText = "position:fixed;left:14px;bottom:52px;z-index:25;padding:7px 11px;border-radius:999px;background:#fff;border:1px solid #d8dee8;box-shadow:0 4px 18px #0002;font:700 11px/1.2 Inter,Arial,sans-serif;color:#334155";
     document.body.appendChild(badge);
   };
