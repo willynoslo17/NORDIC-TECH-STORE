@@ -27,10 +27,33 @@
     badge.style.color = online ? "#047857" : "#64748b";
   }
 
+  function curated(item, index, category) {
+    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || 0);
+    return {
+      id: 10001 + index,
+      name: item.name || "Selected product",
+      cat: item.category || category,
+      base: amount > 0 ? amount : 1,
+      v: "v" + ((index % 4) + 1),
+      tag: "CJ Selected",
+      image: item.image || "",
+      sku: item.sku || ""
+    };
+  }
+
   window.loadNordicCatalog = async function (config) {
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 7000);
     try {
+      const localResponse = await fetch("catalog/selected-products.json", { cache: "no-store" });
+      if (localResponse.ok) {
+        const localItems = await localResponse.json();
+        if (Array.isArray(localItems) && localItems.length) {
+          const selected = localItems.map((item, index) => curated(item, index, config.category)).slice(0, 30);
+          setStatus("CJ catálogo seleccionado · " + selected.length + " productos", true);
+          return selected;
+        }
+      }
       const url = CJ_ENDPOINT + "?q=" + encodeURIComponent(config.query);
       const response = await fetch(url, { signal: timeout.signal });
       if (!response.ok) throw new Error("CJ unavailable");
@@ -47,7 +70,7 @@
         tag: "CJ Selected",
         image: item.bigImage || item.image || "",
         sku: item.sku || ""
-      })).filter(item => item.base > 0).slice(0, 20);
+      })).filter(item => item.base > 0).slice(0, 30);
       if (!products.length) throw new Error("Empty CJ catalog");
       setStatus("CJ conectado · " + products.length + " productos", true);
       return products;
