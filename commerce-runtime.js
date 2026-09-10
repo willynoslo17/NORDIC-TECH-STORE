@@ -5,6 +5,12 @@
   const STORE = (document.title || "Nordic Store").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   const CART_KEY = "nordic-cart:" + STORE;
   const ORDER_KEY = "nordic-orders:" + STORE;
+  const CONTACT_EMAILS = {
+    info: "info@mlinternasjonal.no",
+    support: "support@mlinternasjonal.no",
+    orders: "orders@mlinternasjonal.no",
+    marketing: "marketing@mlinternasjonal.no"
+  };
   let started = false;
 
   function read(key, fallback) {
@@ -58,7 +64,7 @@
     document.head.appendChild(style);
     document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="nordicInfo"><section class="nordic-info-card"><button type="button" id="nordicInfoClose">Close</button><div id="nordicInfoBody"></div></section></div>');
     const footer = document.querySelector("footer") || document.body;
-    footer.insertAdjacentHTML("beforeend", '<div class="nordic-info-links"><button type="button" data-info="shipping">Shipping</button><button type="button" data-info="returns">Returns</button><button type="button" data-info="privacy">Privacy</button><button type="button" data-info="terms">Terms</button><button type="button" data-info="orders">Order status</button></div>');
+    footer.insertAdjacentHTML("beforeend", '<div class="nordic-info-links"><button type="button" data-info="shipping">Shipping</button><button type="button" data-info="returns">Returns</button><button type="button" data-info="privacy">Privacy</button><button type="button" data-info="terms">Terms</button><button type="button" data-info="orders">Order status</button><a href="mailto:'+CONTACT_EMAILS.info+'">'+CONTACT_EMAILS.info+'</a><a href="mailto:'+CONTACT_EMAILS.support+'">Support</a></div>');
     document.getElementById("nordicInfoClose").onclick = closeInfo;
     document.getElementById("nordicInfo").onclick = event => { if (event.target.id === "nordicInfo") closeInfo(); };
   }
@@ -125,7 +131,7 @@
   const pages = {
     shipping: '<h2>Shipping</h2><p>Delivery estimates and prices are shown in the cart for the selected market. Final availability depends on supplier stock and destination. Tracking is provided after supplier fulfilment.</p><p>Norway and European orders may be subject to VAT or customs rules. DDP will be preferred when the supplier confirms it.</p>',
     returns: '<h2>Returns and refunds</h2><p>Contact support within 14 days of delivery before returning an item. Products must be unused and in their original packaging. Faulty or incorrect products require photos and the order number.</p><p>Return eligibility, address and refund timing must be confirmed before shipment because products may come from different suppliers.</p>',
-    privacy: '<h2>Privacy</h2><p>This preview stores cart and test-order information only in this browser. It does not transmit checkout data or payment information to a server.</p><p>A production launch requires a secure order backend, data controller contact, retention policy and compliant payment provider.</p>',
+    privacy: '<h2>Privacy</h2><p>Checkout and contact details are submitted securely to Netlify Forms so ML Internasjonal Handel can respond to the request and prepare the order. No payment-card data is collected here.</p><p>Data controller: Martinez Lozano Internasjonal Handel (ENK), Org. No. NO935407095MVA. Privacy enquiries: '+CONTACT_EMAILS.info+'.</p>',
     terms: '<h2>Terms</h2><p>Products, prices and delivery estimates are for catalogue evaluation until live payments and supplier routing are enabled. Submitting the checkout currently creates a local test-order draft and does not charge money.</p>',
     orders: ""
   };
@@ -159,7 +165,7 @@
     const button = form.querySelector('[type="submit"]');
     button.textContent = "CREATE SECURE ORDER DRAFT";
     button.insertAdjacentHTML("beforebegin", '<select name="payment" class="full" required><option value="">Payment method</option><option value="activation-pending">Online payment — activation pending</option></select><label class="full nordic-consent"><input required type="checkbox" name="terms"> <span>I accept the terms, privacy information and return conditions. This preview creates a local test order and does not charge me.</span></label>');
-    form.onsubmit = event => {
+    form.onsubmit = async event => {
       event.preventDefault();
       if (!form.reportValidity()) return;
       const items = Object.entries(cartObject()).map(([id, quantity]) => {
@@ -170,16 +176,63 @@
       const id = "NORD-" + Date.now().toString(36).toUpperCase();
       const orders = read(ORDER_KEY, []);
       const activeMarket = typeof marketCode !== "undefined" ? marketCode : (typeof market === "string" ? market : "NO");
-      orders.unshift({ id, date: new Date().toLocaleString(), market: activeMarket, items, status: "payment-pending" });
+      const customer = Object.fromEntries(new FormData(form).entries());
+      const order = { id, date: new Date().toISOString(), market: activeMarket, store: STORE, items, customer, status: "payment-pending" };
+      orders.unshift(order);
       write(ORDER_KEY, orders.slice(0, 20));
+      button.disabled = true;
+      button.textContent = "SENDING…";
+      const payload = new URLSearchParams({
+        "form-name": "nordic-order",
+        store: STORE,
+        order_id: id,
+        market: activeMarket,
+        name: customer.name || "",
+        email: customer.email || "",
+        phone: customer.phone || "",
+        city: customer.city || "",
+        address: customer.address || "",
+        country: customer.country || "",
+        items: JSON.stringify(items),
+        consent: customer.terms ? "accepted" : ""
+      });
+      try {
+        const response = await fetch("/api/order", {
+          method:"POST",
+          headers:{"Content-Type":"application/json"},
+          body:JSON.stringify({
+            store:STORE, order_id:id, market:activeMarket,
+            name:customer.name || "", email:customer.email || "",
+            phone:customer.phone || "", city:customer.city || "",
+            address:customer.address || "", country:customer.country || "",
+            items, consent:customer.terms ? "accepted" : ""
+          })
+        });
+        if (!response.ok) throw new Error("Order automation unavailable");
+      } catch (_) {
+        try {
+          const fallback = await fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:payload.toString()});
+          if (!fallback.ok) throw new Error("Fallback failed");
+        } catch (_) {
+        button.disabled = false;
+        button.textContent = "TRY SENDING AGAIN";
+        alert("We saved the order draft on this device, but could not send it. Please email " + CONTACT_EMAILS.orders + " and include " + id + ".");
+        return;
+        }
+      }
       setCartObject({});
       write(CART_KEY, {});
       redrawCart();
       form.style.display = "none";
       const success = document.getElementById("success");
       success.style.display = "block";
-      success.innerHTML = '<h3>Order draft created</h3><p class="nordic-order-id">'+esc(id)+'</p><p>This test order is saved on this device. No payment was charged. Live processing begins after payment and supplier credentials are activated.</p>';
+      success.innerHTML = '<h3>Order request received</h3><p class="nordic-order-id">'+esc(id)+'</p><p>A confirmation will be sent to '+esc(customer.email)+'. No payment was charged. Questions: <a href="mailto:'+CONTACT_EMAILS.orders+'">'+CONTACT_EMAILS.orders+'</a>.</p>';
     };
+  }
+
+  function ensureNetlifyForm() {
+    if (document.querySelector('form[name="nordic-order"]')) return;
+    document.body.insertAdjacentHTML("beforeend", '<form name="nordic-order" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="bot-field"><input name="store"><input name="order_id"><input name="market"><input name="name"><input name="email"><input name="phone"><input name="city"><input name="address"><input name="country"><textarea name="items"></textarea><input name="consent"></form>');
   }
 
   function restoreCart() {
@@ -198,6 +251,7 @@
     addPolicies();
     addCatalogTools();
     addTrustAndSeo();
+    ensureNetlifyForm();
     enhanceCheckout();
     restoreCart();
     document.addEventListener("click", event => {

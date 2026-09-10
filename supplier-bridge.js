@@ -2,7 +2,7 @@
 (function () {
   "use strict";
 
-  const CJ_ENDPOINT = "https://nordic-beauty-perfumes.pages.dev/api/cj-products";
+  const CJ_ENDPOINT = "/api/cj-products";
 
   function rows(payload) {
     const content = payload && payload.data && payload.data.content;
