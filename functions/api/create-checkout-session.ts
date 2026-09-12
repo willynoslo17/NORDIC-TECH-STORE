@@ -17,7 +17,7 @@ const markets = {
 
 const products = new Map(
   catalog.slice(0, 30).map((product, index) => [
-    String(10001 + index),
+    String(index + 1),
     {
       name: String(product.name).slice(0, 200),
       sku: String(product.sku || "").slice(0, 100),
