@@ -117,7 +117,7 @@
       const notice = document.createElement("p");
       notice.id = "nordicPriceNotice";
       notice.style.cssText = "font-size:12px;line-height:1.5;opacity:.72;margin:0 0 14px";
-      notice.textContent = "Prices are catalogue estimates. Final VAT, shipping, stock and delivery are confirmed before payment activation.";
+      notice.textContent = "Prices and standard shipping are confirmed in secure Stripe Checkout. Supplier stock and delivery remain subject to final availability.";
       grid.parentNode.insertBefore(notice, grid);
     }
     const schema = document.createElement("script");
@@ -131,8 +131,8 @@
   const pages = {
     shipping: '<h2>Shipping</h2><p>Delivery estimates and prices are shown in the cart for the selected market. Final availability depends on supplier stock and destination. Tracking is provided after supplier fulfilment.</p><p>Norway and European orders may be subject to VAT or customs rules. DDP will be preferred when the supplier confirms it.</p>',
     returns: '<h2>Returns and refunds</h2><p>Contact support within 14 days of delivery before returning an item. Products must be unused and in their original packaging. Faulty or incorrect products require photos and the order number.</p><p>Return eligibility, address and refund timing must be confirmed before shipment because products may come from different suppliers.</p>',
-    privacy: '<h2>Privacy</h2><p>Checkout and contact details are submitted securely to Netlify Forms so ML Internasjonal Handel can respond to the request and prepare the order. No payment-card data is collected here.</p><p>Data controller: Martinez Lozano Internasjonal Handel (ENK), Org. No. NO935407095MVA. Privacy enquiries: '+CONTACT_EMAILS.info+'.</p>',
-    terms: '<h2>Terms</h2><p>Products, prices and delivery estimates are for catalogue evaluation until live payments and supplier routing are enabled. Submitting the checkout currently creates a local test-order draft and does not charge money.</p>',
+    privacy: '<h2>Privacy</h2><p>Contact and delivery details are used to process your order. Card information is collected and processed securely by Stripe and is not stored by this storefront.</p><p>Data controller: Martinez Lozano Internasjonal Handel (ENK), Org. No. NO935407095MVA. Privacy enquiries: '+CONTACT_EMAILS.info+'.</p>',
+    terms: '<h2>Terms</h2><p>The final amount and currency are displayed by Stripe before payment. An order is accepted only after successful payment and supplier availability confirmation.</p>',
     orders: ""
   };
 
@@ -141,7 +141,7 @@
     const body = document.getElementById("nordicInfoBody");
     if (type === "orders") {
       const orders = read(ORDER_KEY, []);
-      body.innerHTML = '<h2>Local test orders</h2>' + (orders.length ? orders.map(order => '<p><strong>'+esc(order.id)+'</strong><br>'+esc(order.date)+' · '+esc(order.market)+' · '+order.items.length+' item(s)<br><span>Status: Awaiting payment activation</span></p>').join("") : '<p>No test orders saved on this device.</p>');
+      body.innerHTML = '<h2>Recent checkout attempts</h2>' + (orders.length ? orders.map(order => '<p><strong>'+esc(order.id)+'</strong><br>'+esc(order.date)+' · '+esc(order.market)+' · '+order.items.length+' item(s)<br><span>Status: '+esc(order.status || "checkout-created")+'</span></p>').join("") : '<p>No recent checkout attempts saved on this device.</p>');
     } else body.innerHTML = pages[type] || pages.terms;
     modal.classList.add("open");
   }
@@ -154,17 +154,21 @@
       document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="checkoutModal"><section class="nordic-info-card"><button type="button" id="checkoutClose">Close</button><h2>Delivery details</h2><form id="checkoutForm" class="formgrid"><input required name="name" placeholder="Full name"><input required type="email" name="email" placeholder="Email"><input required name="phone" placeholder="Phone"><input required name="city" placeholder="City"><input required class="full" name="address" placeholder="Address"><select required name="country" class="full"><option value="Norway">Norway</option><option value="Europe">Europe</option><option value="Peru">Peru</option></select><button class="checkout full" type="submit">CREATE SECURE ORDER DRAFT</button></form><div id="success" style="display:none"></div></section></div>');
       form = document.getElementById("checkoutForm");
       document.getElementById("checkoutClose").onclick = () => document.getElementById("checkoutModal").classList.remove("open");
-      const trigger = document.querySelector(".drawer .checkout");
-      if (trigger) trigger.onclick = () => {
-        if (!Object.keys(cartObject()).length) return;
-        document.getElementById("checkoutModal").classList.add("open");
-      };
     }
+    const trigger = document.querySelector(".drawer .checkout");
+    if (trigger) trigger.onclick = () => {
+      if (!Object.keys(cartObject()).length) return;
+      const modal = document.getElementById("checkoutModal") || document.getElementById("modal");
+      if (!modal) return;
+      document.getElementById("drawer")?.classList.remove("open");
+      modal.classList.add("open", "show");
+      document.getElementById("overlay")?.classList.add("show");
+    };
     if (form.dataset.enhanced) return;
     form.dataset.enhanced = "true";
     const button = form.querySelector('[type="submit"]');
-    button.textContent = "CREATE SECURE ORDER DRAFT";
-    button.insertAdjacentHTML("beforebegin", '<select name="payment" class="full" required><option value="">Payment method</option><option value="activation-pending">Online payment — activation pending</option></select><label class="full nordic-consent"><input required type="checkbox" name="terms"> <span>I accept the terms, privacy information and return conditions. This preview creates a local test order and does not charge me.</span></label>');
+    button.textContent = "PAY SECURELY WITH STRIPE";
+    button.insertAdjacentHTML("beforebegin", '<label class="full nordic-consent"><input required type="checkbox" name="terms"> <span>I accept the terms, privacy information and return conditions.</span></label>');
     form.onsubmit = async event => {
       event.preventDefault();
       if (!form.reportValidity()) return;
@@ -177,56 +181,28 @@
       const orders = read(ORDER_KEY, []);
       const activeMarket = typeof marketCode !== "undefined" ? marketCode : (typeof market === "string" ? market : "NO");
       const customer = Object.fromEntries(new FormData(form).entries());
-      const order = { id, date: new Date().toISOString(), market: activeMarket, store: STORE, items, customer, status: "payment-pending" };
+      const order = { id, date: new Date().toISOString(), market: activeMarket, store: STORE, items, customer, status: "checkout-started" };
       orders.unshift(order);
       write(ORDER_KEY, orders.slice(0, 20));
       button.disabled = true;
-      button.textContent = "SENDING…";
-      const payload = new URLSearchParams({
-        "form-name": "nordic-order",
-        store: STORE,
-        order_id: id,
-        market: activeMarket,
-        name: customer.name || "",
-        email: customer.email || "",
-        phone: customer.phone || "",
-        city: customer.city || "",
-        address: customer.address || "",
-        country: customer.country || "",
-        items: JSON.stringify(items),
-        consent: customer.terms ? "accepted" : ""
-      });
+      button.textContent = "OPENING STRIPE…";
       try {
-        const response = await fetch("/api/order", {
+        const response = await fetch("/api/create-checkout-session", {
           method:"POST",
           headers:{"Content-Type":"application/json"},
           body:JSON.stringify({
-            store:STORE, order_id:id, market:activeMarket,
-            name:customer.name || "", email:customer.email || "",
-            phone:customer.phone || "", city:customer.city || "",
-            address:customer.address || "", country:customer.country || "",
-            items, consent:customer.terms ? "accepted" : ""
+            order_id:id, market:activeMarket, email:customer.email || "", items
           })
         });
-        if (!response.ok) throw new Error("Order automation unavailable");
-      } catch (_) {
-        try {
-          const fallback = await fetch("/", {method:"POST", headers:{"Content-Type":"application/x-www-form-urlencoded"}, body:payload.toString()});
-          if (!fallback.ok) throw new Error("Fallback failed");
-        } catch (_) {
+        const checkout = await response.json();
+        if (!response.ok || !checkout.url) throw new Error(checkout.error || "Payment unavailable");
+        window.location.assign(checkout.url);
+      } catch (error) {
         button.disabled = false;
-        button.textContent = "TRY SENDING AGAIN";
-        alert("We saved the order draft on this device, but could not send it. Please email " + CONTACT_EMAILS.orders + " and include " + id + ".");
+        button.textContent = "TRY PAYMENT AGAIN";
+        alert((error && error.message ? error.message : "Stripe Checkout is temporarily unavailable") + ". Please contact " + CONTACT_EMAILS.orders + ".");
         return;
-        }
       }
-      setCartObject({});
-      write(CART_KEY, {});
-      redrawCart();
-      form.style.display = "none";
-      const success = document.getElementById("success");
-      success.style.display = "block";
-      success.innerHTML = '<h3>Order request received</h3><p class="nordic-order-id">'+esc(id)+'</p><p>A confirmation will be sent to '+esc(customer.email)+'. No payment was charged. Questions: <a href="mailto:'+CONTACT_EMAILS.orders+'">'+CONTACT_EMAILS.orders+'</a>.</p>';
     };
   }
 
