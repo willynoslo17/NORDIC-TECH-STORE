@@ -1,5 +1,6 @@
 type Env = {
   STRIPE_WEBHOOK_SECRET?: string;
+  STRIPE_SECRET_KEY?: string;
   MAKE_ORDERS_WEBHOOK?: string;
 };
 
@@ -7,6 +8,23 @@ type StripeEvent = {
   id?: string;
   type?: string;
   data?: { object?: Record<string, unknown> };
+};
+
+type AddressLike = {
+  line1?: string;
+  line2?: string;
+  city?: string;
+  state?: string;
+  postal_code?: string;
+  country?: string;
+};
+
+type LineItemOut = {
+  description: string;
+  quantity: number;
+  amount_total: number;
+  currency: string;
+  price_id: string;
 };
 
 function hex(bytes: ArrayBuffer) {
@@ -37,6 +55,58 @@ async function validSignature(payload: string, signature: string, secret: string
   return signatures.some((candidate) => safeEqual(candidate, expected));
 }
 
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
+}
+
+function str(value: unknown) {
+  return value == null ? "" : String(value);
+}
+
+function buildShipping(session: Record<string, unknown>) {
+  const shippingDetails = asRecord(session.shipping_details);
+  const customerDetails = asRecord(session.customer_details);
+  const shippingAddress = asRecord(shippingDetails.address);
+  const customerAddress = asRecord(customerDetails.address);
+  const addr = (shippingAddress.line1 || shippingAddress.country ? shippingAddress : customerAddress) as AddressLike;
+  return {
+    name: str(shippingDetails.name || customerDetails.name || ""),
+    phone: str(shippingDetails.phone || customerDetails.phone || ""),
+    line1: str(addr.line1 || ""),
+    line2: str(addr.line2 || ""),
+    city: str(addr.city || ""),
+    state: str(addr.state || ""),
+    postal_code: str(addr.postal_code || ""),
+    country: str(addr.country || ""),
+  };
+}
+
+async function fetchLineItems(sessionId: string, secretKey: string): Promise<LineItemOut[]> {
+  if (!sessionId || !secretKey) return [];
+  try {
+    const response = await fetch(
+      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/line_items?limit=100`,
+      {
+        headers: { Authorization: `Bearer ${secretKey}` },
+      }
+    );
+    if (!response.ok) return [];
+    const body = (await response.json()) as { data?: Array<Record<string, unknown>> };
+    return (body.data || []).map((item) => {
+      const price = asRecord(item.price);
+      return {
+        description: str(item.description || ""),
+        quantity: Number(item.quantity || 0),
+        amount_total: Number(item.amount_total || 0),
+        currency: str(item.currency || ""),
+        price_id: str(price.id || ""),
+      };
+    });
+  } catch {
+    return [];
+  }
+}
+
 export async function onRequestPost(context: { request: Request; env: Env }) {
   const secret = context.env.STRIPE_WEBHOOK_SECRET;
   const makeHook = context.env.MAKE_ORDERS_WEBHOOK;
@@ -54,18 +124,28 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
 
   if (event.type !== "checkout.session.completed") return Response.json({ received: true });
   const session = event.data?.object || {};
+  const meta = asRecord(session.metadata);
+  const customerDetails = asRecord(session.customer_details);
+  const sessionId = str(session.id);
+  const lineItems = await fetchLineItems(sessionId, context.env.STRIPE_SECRET_KEY || "");
+
   const confirmation = {
     source: "stripe",
     event_id: String(event.id || ""),
     event_type: event.type,
     store: "nordic-tech-store",
-    order_id: String((session.metadata as Record<string, unknown> | undefined)?.order_id || ""),
-    market: String((session.metadata as Record<string, unknown> | undefined)?.market || ""),
-    payment_status: String(session.payment_status || ""),
-    customer_email: String((session.customer_details as Record<string, unknown> | undefined)?.email || session.customer_email || ""),
+    order_id: str(meta.order_id || ""),
+    market: str(meta.market || ""),
+    provider: str(meta.provider || ""),
+    payment_status: str(session.payment_status || ""),
+    customer_email: str(customerDetails.email || session.customer_email || ""),
+    customer_name: str(customerDetails.name || ""),
+    customer_phone: str(customerDetails.phone || ""),
+    shipping: buildShipping(session),
+    line_items: lineItems,
     amount_total: Number(session.amount_total || 0),
-    currency: String(session.currency || ""),
-    stripe_session_id: String(session.id || ""),
+    currency: str(session.currency || ""),
+    stripe_session_id: sessionId,
     received_at: new Date().toISOString(),
   };
   const response = await fetch(makeHook, {
