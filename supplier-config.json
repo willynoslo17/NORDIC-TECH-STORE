@@ -2,8 +2,10 @@
   "store": "tech",
   "cjDropshipping": {
     "enabled": true,
-    "query": "electronics",
-    "catalogMode": "live-with-local-fallback"
+    "query": "phone accessories",
+    "catalogMode": "live-curated-winners",
+    "storefrontCap": 150,
+    "note": "Live CJ API curated to top ~120–150 winners (listedNum/sales/price/EU cues). totalRecords may stay high in meta; products[] is capped for boutique storefront."
   },
   "germanDrop": {
     "enabled": true,

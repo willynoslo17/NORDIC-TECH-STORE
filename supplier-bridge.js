@@ -107,39 +107,45 @@
   }
 
   async function loadCjSelected(config) {
-    const localItems = await loadJson(LOCAL_FILES.cj);
-    if (localItems.length) {
-      return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 50);
-    }
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), 7000);
+    const timer = setTimeout(() => timeout.abort(), 28000);
     try {
       const url = ENDPOINTS.cj + "?q=" + encodeURIComponent(config.query || "");
-      const response = await fetch(url, { signal: timeout.signal });
-      if (!response.ok) throw new Error("CJ unavailable");
-      const payload = await response.json();
-      return rows(payload)
-        .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
-        .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
-        .map((item, index) => ({
-          id: 10001 + index,
-          name: item.nameEn || item.name || "CJ product",
-          cat: config.category,
-          base: price(item.sellPrice || item.nowPrice),
-          v: "v" + ((index % 4) + 1),
-          tag: "CJ",
-          brand: "CJ Dropshipping",
-          image: item.bigImage || item.image || "",
-          sku: item.sku || "",
-          supplier: "CJ Dropshipping",
-          provider: "cj",
-          badgeColor: BRAND_COLORS.cj
-        })).filter(item => item.base > 0).slice(0, 50);
+      const response = await fetch(url, { signal: timeout.signal, cache: "no-store" });
+      if (response.ok) {
+        const payload = await response.json();
+        if (Array.isArray(payload.products) && payload.products.length) {
+          return payload.products
+            .map((item, index) => curated({ ...item, brand: item.brand || "CJ Dropshipping", supplier: item.supplier || "CJ Dropshipping" }, index, config.category, "cj"))
+            .filter(item => item.base > 0)
+            .slice(0, 150);
+        }
+        const live = rows(payload)
+          .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
+          .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
+          .map((item, index) => ({
+            id: 10001 + index,
+            name: item.nameEn || item.name || "CJ product",
+            cat: config.category,
+            base: price(item.sellPrice || item.nowPrice),
+            v: "v" + ((index % 4) + 1),
+            tag: "CJ",
+            brand: "CJ Dropshipping",
+            image: item.bigImage || item.image || "",
+            sku: item.sku || "",
+            supplier: "CJ Dropshipping",
+            provider: "cj",
+            badgeColor: BRAND_COLORS.cj
+          })).filter(item => item.base > 0).slice(0, 150);
+        if (live.length) return live;
+      }
     } catch (_) {
-      return [];
+      /* fall through to local */
     } finally {
       clearTimeout(timer);
     }
+    const localItems = await loadJson(LOCAL_FILES.cj);
+    return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 150);
   }
 
   async function loadPodCatalog(provider, category, query) {

@@ -1,5 +1,350 @@
-const BASE="https://developers.cjdropshipping.com/api2.0/v1";
-const TERMS=new Set(["electronics","smart home","computer accessories","phone accessories","wearable technology"]);
-async function token(key:string){const r=await fetch(BASE+"/authentication/getAccessToken",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({apiKey:key})});const j=await r.json();if(!r.ok||!j?.data?.accessToken)throw new Error(j?.message||"CJ authentication failed");return j.data.accessToken as string}
-export default async(req:Request)=>{if(req.method!=="GET")return Response.json({error:"Method not allowed"},{status:405});const key=Netlify.env.get("CJ_API_KEY");if(!key)return Response.json({error:"CJ is not configured"},{status:503});const u=new URL(req.url),wanted=(u.searchParams.get("q")||"electronics").toLowerCase(),q=TERMS.has(wanted)?wanted:"electronics";try{const access=await token(key),p=new URL(BASE+"/product/listV2");p.searchParams.set("page","1");p.searchParams.set("size","20");p.searchParams.set("keyWord",q);const r=await fetch(p,{headers:{"CJ-Access-Token":access}}),j=await r.json();if(!r.ok||j?.success===false)return Response.json({error:j?.message||"CJ product request failed"},{status:502});return Response.json({ok:true,supplier:"cj",sector:"technology",query:q,markets:["NO","EU","PE"],data:j.data})}catch(e){return Response.json({error:e instanceof Error?e.message:"CJ request failed"},{status:502})}};
-export const config={path:"/api/cj-products"};
+/**
+ * Nordic CJ live curated catalog.
+ * Fetches real CJ provider products, scores winners, returns boutique storefront set.
+ * totalRecords stays high in meta; products[] / data.content are capped (~120–150).
+ */
+const BASE = "https://developers.cjdropshipping.com/api2.0/v1";
+const STOREFRONT_CAP = 150;
+const FETCH_SIZE = 20;
+const PAGES_PER_KEYWORD = 2;
+const CJ_LIVE_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-products";
+
+type StoreProfile = {
+  sector: string;
+  defaultQuery: string;
+  keywords: string[];
+  /** Prefer verified/CE when true (electronics / auto / energy). */
+  preferCertified: boolean;
+  /** Kids / beauty claim filters. */
+  compliance: "general" | "beauty" | "kids" | "health_adjacent";
+  enableFallback: boolean;
+};
+
+const PROFILE: StoreProfile = {
+  "sector": "technology",
+  "defaultQuery": "phone accessories",
+  "keywords": [
+    "smart home",
+    "computer accessories",
+    "wearable technology",
+    "phone accessories",
+    "electronics"
+  ],
+  "preferCertified": true,
+  "compliance": "general",
+  "enableFallback": false
+} as StoreProfile;
+
+/** Per-sector search terms so fallback gateway (beauty) never mixes beauty SKUs into pet/tech/etc. */
+const SECTOR_KEYWORDS: Record<string, string[]> = {
+  beauty: ["beauty", "skincare", "perfume", "facial", "cosmetic", "hair care"],
+  skincare: ["skincare", "facial", "cosmetic", "beauty"],
+  perfume: ["perfume", "beauty", "cosmetic"],
+  facial: ["facial", "skincare", "beauty"],
+  cosmetic: ["cosmetic", "beauty", "skincare"],
+  "hair care": ["hair care", "beauty"],
+  electronics: ["phone accessories", "smart home", "computer accessories", "wearable technology", "electronics"],
+  technology: ["phone accessories", "smart home", "computer accessories", "wearable technology", "electronics"],
+  "smart home": ["smart home", "phone accessories", "computer accessories"],
+  "mobile accessories": ["mobile accessories", "phone accessories", "electronics"],
+  "phone accessories": ["phone accessories", "mobile accessories", "computer accessories", "smart home", "wearable technology"],
+  "computer accessories": ["computer accessories", "phone accessories", "smart home", "electronics"],
+  "wearable technology": ["wearable technology", "phone accessories", "smart home"],
+  wearables: ["wearable technology", "phone accessories"],
+  toys: ["toys", "educational toys", "montessori toys", "stem toys", "baby toys"],
+  "educational toys": ["educational toys", "montessori toys", "stem toys", "toys", "baby toys"],
+  "montessori toys": ["montessori toys", "educational toys", "toys"],
+  "stem toys": ["stem toys", "educational toys", "toys"],
+  "baby toys": ["baby toys", "toys", "educational toys"],
+  "home living": ["home living", "home decor", "kitchen organizer", "storage box", "led lamp"],
+  fitness: ["fitness", "yoga mat", "resistance band", "dumbbell", "sports outdoor"],
+  "pet supplies": ["pet supplies", "dog toys", "cat toy", "pet bed", "dog leash"],
+  "car accessories": ["car accessories", "car organizer", "car charger", "phone holder car", "car cleaning"],
+  "solar energy": ["solar energy", "solar panel", "solar light", "portable power station", "solar charger"],
+};
+
+
+const ALLOWED_Q = new Set(
+  [
+    PROFILE.defaultQuery,
+    ...PROFILE.keywords,
+    "beauty",
+    "skincare",
+    "perfume",
+    "facial",
+    "cosmetic",
+    "hair care",
+    "electronics",
+    "smart home",
+    "mobile accessories",
+    "phone accessories",
+    "computer accessories",
+    "wearable technology",
+    "wearables",
+    "toys",
+    "educational toys",
+    "montessori toys",
+    "stem toys",
+    "baby toys",
+    "home living",
+    "fitness",
+    "pet supplies",
+    "car accessories",
+    "solar energy",
+  ].map((s) => s.toLowerCase())
+);
+
+const BLOCK_GENERAL =
+  /\b(prescription|rx\b|viagra|steroid|cannabis|cbd oil|weapon|firearm|ammunition|explosive)\b/i;
+const BLOCK_BEAUTY =
+  /\b(cure|treats?\b|treat ment|medical grade|prescription|drug\b|fda approved|anti[- ]?cancer|diagnos|therapy device that cures)\b/i;
+const BLOCK_KIDS =
+  /\b(ce\s*certified\s*toy|en71\s*certified|medical|choking hazard free claim|ages?\s*0)\b/i;
+
+async function getToken(apiKey: string) {
+  const response = await fetch(BASE + "/authentication/getAccessToken", {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ apiKey }),
+  });
+  const result: any = await response.json();
+  if (!response.ok || !result?.data?.accessToken) {
+    throw new Error(result?.message || "CJ authentication failed");
+  }
+  return result.data.accessToken as string;
+}
+
+function parsePrice(value: unknown): number {
+  const amount = Number.parseFloat(String(value || "").split("-")[0].trim());
+  return Number.isFinite(amount) && amount > 0 ? amount : 0;
+}
+
+function flatten(data: any): any[] {
+  const content = data?.content;
+  if (!Array.isArray(content)) return [];
+  return content.flatMap((group: any) => (Array.isArray(group?.productList) ? group.productList : []));
+}
+
+function blocked(name: string): boolean {
+  if (BLOCK_GENERAL.test(name)) return true;
+  if (PROFILE.compliance === "beauty" && BLOCK_BEAUTY.test(name)) return true;
+  if (PROFILE.compliance === "kids" && BLOCK_KIDS.test(name)) return true;
+  if (PROFILE.compliance === "health_adjacent" && BLOCK_BEAUTY.test(name)) return true;
+  return false;
+}
+
+function score(item: any): number {
+  const listed = Number(item.listedNum) || 0;
+  const inv = Math.min(Number(item.warehouseInventoryNum) || 0, 5000);
+  const price = parsePrice(item.sellPrice || item.nowPrice);
+  let s = listed + inv / 10;
+  if (item.bigImage) s += 80;
+  if (price >= 2 && price <= 180) s += 60;
+  else if (price > 0 && price <= 400) s += 20;
+  else s -= 40;
+  if (PROFILE.preferCertified && (item.hasCECertification === true || item.hasCECertification === "true")) s += 50;
+  if (item.verifiedWarehouse) s += 25;
+  if (Number(item.totalVerifiedInventory) > 0) s += 15;
+  // Mild EU/Nordic cue from warehouse / zone text when present
+  const zone = JSON.stringify(item.zoneRecommendJson || "");
+  if (/EU|Europe|DE|PL|CZ|NL|NO|SE|DK|FI/i.test(zone)) s += 35;
+  if (blocked(String(item.nameEn || item.name || ""))) s -= 10000;
+  return s;
+}
+
+function toProduct(item: any, index: number, sector: string) {
+  const cost = parsePrice(item.sellPrice || item.nowPrice);
+  const retail = cost > 0 ? Math.round(cost * 2.2 * 100) / 100 : 0;
+  return {
+    id: String(item.id || item.sku || index),
+    name: String(item.nameEn || item.name || "CJ product").slice(0, 160),
+    category: sector,
+    cat: sector,
+    sku: String(item.sku || ""),
+    image: String(item.bigImage || ""),
+    supplierPriceUsd: cost,
+    suggestedRetailUsd: retail,
+    base: retail,
+    brand: "CJ Dropshipping",
+    supplier: "CJ Dropshipping",
+    provider: "cj",
+    listedNum: Number(item.listedNum) || 0,
+    warehouseInventoryNum: Number(item.warehouseInventoryNum) || 0,
+    hasCECertification: !!item.hasCECertification,
+    compliance: "EU/Nordic curated — no fake medical/drug/CE-toy claims",
+  };
+}
+
+async function fetchPage(token: string, keyword: string, page: number) {
+  const productsUrl = new URL(BASE + "/product/listV2");
+  productsUrl.searchParams.set("page", String(page));
+  productsUrl.searchParams.set("size", String(FETCH_SIZE));
+  productsUrl.searchParams.set("keyWord", keyword);
+  const response = await fetch(productsUrl, { headers: { "CJ-Access-Token": token } });
+  const result: any = await response.json();
+  if (!response.ok || result?.success === false) {
+    throw new Error(result?.message || "CJ product request failed");
+  }
+  return result.data;
+}
+
+async function collectWinners(token: string, primaryQuery: string) {
+  const fromMap = SECTOR_KEYWORDS[primaryQuery] || SECTOR_KEYWORDS[PROFILE.sector] || PROFILE.keywords;
+  const keywords = Array.from(
+    new Set([primaryQuery, ...fromMap].map((k) => k.trim().toLowerCase()).filter(Boolean))
+  ).slice(0, 5);
+
+  const jobs: { keyword: string; page: number }[] = [];
+  for (const keyword of keywords) {
+    for (let page = 1; page <= PAGES_PER_KEYWORD; page++) {
+      jobs.push({ keyword, page });
+    }
+  }
+
+  const results = await Promise.all(
+    jobs.map(async (job) => {
+      try {
+        const data = await fetchPage(token, job.keyword, job.page);
+        return { ...job, data };
+      } catch (_) {
+        return { ...job, data: null as any };
+      }
+    })
+  );
+
+  let totalRecords = 0;
+  const byId = new Map<string, any>();
+  for (const row of results) {
+    const data = row.data;
+    if (!data) continue;
+    if (row.keyword === primaryQuery && row.page === 1) {
+      totalRecords = Number(data?.totalRecords) || totalRecords;
+    }
+    if (!totalRecords && data?.totalRecords) totalRecords = Number(data.totalRecords) || 0;
+    for (const item of flatten(data)) {
+      const id = String(item?.id || item?.sku || "");
+      if (!id) continue;
+      if (!item.bigImage) continue;
+      const price = parsePrice(item.sellPrice || item.nowPrice);
+      if (price <= 0 || price > 1000) continue;
+      if (blocked(String(item.nameEn || item.name || ""))) continue;
+      const prev = byId.get(id);
+      if (!prev || score(item) > score(prev)) byId.set(id, item);
+    }
+  }
+
+  const ranked = Array.from(byId.values()).sort((a, b) => score(b) - score(a));
+  const winners = ranked.slice(0, STOREFRONT_CAP);
+  return { winners, totalRecords: totalRecords || winners.length, scanned: byId.size };
+}
+
+function curatedPayload(
+  sector: string,
+  query: string,
+  winners: any[],
+  totalRecords: number,
+  scanned: number,
+  page: number
+) {
+  const products = winners.map((item, index) => toProduct(item, index, sector));
+  const pageSize = STOREFRONT_CAP;
+  const start = (page - 1) * pageSize;
+  const pageProducts = products.slice(start, start + pageSize);
+  const pageRaw = winners.slice(start, start + pageSize);
+  return {
+    ok: true,
+    supplier: "cj",
+    sector,
+    query,
+    page,
+    markets: ["NO", "EU", "PE"],
+    storefrontCap: STOREFRONT_CAP,
+    count: pageProducts.length,
+    scanned,
+    source: "cj-live-curated",
+    products: pageProducts,
+    data: {
+      pageSize: pageProducts.length,
+      pageNumber: page,
+      totalRecords,
+      totalPages: Math.max(1, Math.ceil(Math.min(products.length, STOREFRONT_CAP) / pageSize)),
+      content: [{ productList: pageRaw }],
+      curatedCount: products.length,
+    },
+  };
+}
+
+async function viaFallback(query: string, page: number, headers: Record<string, string>) {
+  const proxy = new URL(CJ_LIVE_FALLBACK);
+  proxy.searchParams.set("q", query);
+  proxy.searchParams.set("page", String(page));
+  proxy.searchParams.set("curate", "1");
+  const response = await fetch(proxy.toString(), {
+    headers: { "user-agent": "Mozilla/5.0 nordic-cj-fallback" },
+  });
+  const result: any = await response.json().catch(() => null);
+  if (!response.ok || !result?.ok) {
+    return Response.json({ error: result?.error || "CJ fallback failed" }, { status: 502, headers });
+  }
+  // Re-label sector to this store while keeping curated products / meta
+  return Response.json(
+    {
+      ...result,
+      sector: PROFILE.sector,
+      query,
+      page,
+      markets: ["NO", "EU", "PE"],
+      source: result.source || "cj-live-curated-fallback",
+    },
+    { headers }
+  );
+}
+
+export default async (req: Request) => {
+  if (req.method !== "GET") return Response.json({ error: "Method not allowed" }, { status: 405 });
+  const url = new URL(req.url);
+  const wanted = (url.searchParams.get("q") || PROFILE.defaultQuery).toLowerCase();
+  const knownSector = Boolean(SECTOR_KEYWORDS[wanted]) || Array.from(Object.values(SECTOR_KEYWORDS)).some((arr) => arr.includes(wanted));
+  const query = ALLOWED_Q.has(wanted) || knownSector ? wanted : PROFILE.defaultQuery;
+  const requestedPage = Number.parseInt(url.searchParams.get("page") || "1", 10);
+  const page = Number.isFinite(requestedPage) ? Math.min(3, Math.max(1, requestedPage)) : 1;
+  const headers = {
+    "access-control-allow-origin": "*",
+    "cache-control": "public, max-age=300",
+  };
+  const apiKey = Netlify.env.get("CJ_API_KEY");
+
+  if (!apiKey) {
+    if (!PROFILE.enableFallback) {
+      return Response.json({ error: "CJ is not configured" }, { status: 503, headers });
+    }
+    try {
+      return await viaFallback(query, page, headers);
+    } catch (error) {
+      return Response.json(
+        { error: error instanceof Error ? error.message : "CJ request failed" },
+        { status: 502, headers }
+      );
+    }
+  }
+
+  try {
+    const token = await getToken(apiKey);
+    const { winners, totalRecords, scanned } = await collectWinners(token, query);
+    return Response.json(curatedPayload(PROFILE.sector, query, winners, totalRecords, scanned, page), {
+      headers,
+    });
+  } catch (error) {
+    if (PROFILE.enableFallback) {
+      try {
+        return await viaFallback(query, page, headers);
+      } catch (_) {}
+    }
+    return Response.json(
+      { error: error instanceof Error ? error.message : "CJ request failed" },
+      { status: 502, headers }
+    );
+  }
+}
+
+export const config = { path: "/api/cj-products" };
