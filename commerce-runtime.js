@@ -27,7 +27,7 @@
 
   function currentProducts() {
     if (typeof products !== "undefined" && Array.isArray(products)) return products;
-    if (typeof data !== "undefined" && Array.isArray(data)) return data.map(x => ({id:x.id,name:x.n,base:x.p,sku:x.sku || ""}));
+    if (typeof data !== "undefined" && Array.isArray(data)) return data.map(x => ({id:x.id,name:x.n,base:x.p,sku:x.sku || "",provider:x.provider || ""}));
     return [];
   }
 
@@ -174,7 +174,7 @@
       if (!form.reportValidity()) return;
       const items = Object.entries(cartObject()).map(([id, quantity]) => {
         const item = productById(id) || {};
-        return { id, sku: item.sku || "", name: item.name || "Product", quantity };
+        return { id, sku: item.sku || "", name: item.name || "Product", quantity, provider: item.provider || "" };
       });
       if (!items.length) return;
       const id = "NORD-" + Date.now().toString(36).toUpperCase();

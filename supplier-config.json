@@ -9,5 +9,16 @@
     "enabled": true,
     "mode": "authorized-manual-catalog"
   },
-  "markets": ["NO", "EU", "PE"]
+  "markets": [
+    "NO",
+    "EU",
+    "PE"
+  ],
+  "printify": {
+    "enabled": true,
+    "shopId": "28847802",
+    "catalogMode": "local-selected-merge",
+    "catalogFile": "catalog/printify-products.json",
+    "note": "Placeholders until PRINTIFY_API_TOKEN + catalog export from shop 28847802 replace them."
+  }
 }

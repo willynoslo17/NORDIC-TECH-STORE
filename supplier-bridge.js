@@ -1,4 +1,4 @@
-/* Nordic supplier bridge: CJ live catalog with an automatic local fallback. */
+/* Nordic supplier bridge: CJ selected catalog + Printify selected catalog (merge). */
 (function () {
   "use strict";
 
@@ -27,7 +27,7 @@
     badge.style.color = online ? "#047857" : "#64748b";
   }
 
-  function curated(item, index, category) {
+  function curatedCj(item, index, category) {
     const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || 0);
     return {
       id: 10001 + index,
@@ -37,49 +37,95 @@
       v: "v" + ((index % 4) + 1),
       tag: "CJ Selected",
       image: item.image || "",
-      sku: item.sku || ""
+      sku: item.sku || "",
+      supplier: item.supplier || "CJ Dropshipping",
+      provider: "cj"
     };
   }
 
-  window.loadNordicCatalog = async function (config) {
+  function curatedPrintify(item, index, category) {
+    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || 0);
+    return {
+      id: 20001 + index,
+      name: item.name || "Printify product",
+      cat: item.category || category,
+      base: amount > 0 ? amount : 1,
+      v: "v" + ((index % 4) + 1),
+      tag: "Printify",
+      image: item.image || "",
+      sku: item.sku || String(item.printifyVariantId || ""),
+      supplier: "Printify",
+      provider: "printify",
+      printifyProductId: item.printifyProductId || "",
+      printifyVariantId: item.printifyVariantId || ""
+    };
+  }
+
+  async function loadJson(url) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      if (!response.ok) return [];
+      const data = await response.json();
+      return Array.isArray(data) ? data : [];
+    } catch (_) {
+      return [];
+    }
+  }
+
+  async function loadPrintifySelected(category) {
+    const items = await loadJson("catalog/printify-products.json");
+    return items.map((item, index) => curatedPrintify(item, index, category)).filter(item => item.base > 0);
+  }
+
+  async function loadCjSelected(config) {
+    const localItems = await loadJson("catalog/selected-products.json");
+    if (localItems.length) {
+      return localItems.map((item, index) => curatedCj(item, index, config.category)).slice(0, 30);
+    }
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 7000);
     try {
-      const localResponse = await fetch("catalog/selected-products.json", { cache: "no-store" });
-      if (localResponse.ok) {
-        const localItems = await localResponse.json();
-        if (Array.isArray(localItems) && localItems.length) {
-          const selected = localItems.map((item, index) => curated(item, index, config.category)).slice(0, 30);
-          setStatus("CJ catálogo seleccionado · " + selected.length + " productos", true);
-          return selected;
-        }
-      }
       const url = CJ_ENDPOINT + "?q=" + encodeURIComponent(config.query);
       const response = await fetch(url, { signal: timeout.signal });
       if (!response.ok) throw new Error("CJ unavailable");
       const payload = await response.json();
-      const products = rows(payload)
+      return rows(payload)
         .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
         .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
         .map((item, index) => ({
-        id: 10001 + index,
-        name: item.nameEn || item.name || "CJ product",
-        cat: config.category,
-        base: price(item.sellPrice || item.nowPrice),
-        v: "v" + ((index % 4) + 1),
-        tag: "CJ Selected",
-        image: item.bigImage || item.image || "",
-        sku: item.sku || ""
-      })).filter(item => item.base > 0).slice(0, 30);
-      if (!products.length) throw new Error("Empty CJ catalog");
-      setStatus("CJ conectado · " + products.length + " productos", true);
-      return products;
+          id: 10001 + index,
+          name: item.nameEn || item.name || "CJ product",
+          cat: config.category,
+          base: price(item.sellPrice || item.nowPrice),
+          v: "v" + ((index % 4) + 1),
+          tag: "CJ Selected",
+          image: item.bigImage || item.image || "",
+          sku: item.sku || "",
+          supplier: "CJ Dropshipping",
+          provider: "cj"
+        })).filter(item => item.base > 0).slice(0, 30);
     } catch (_) {
-      setStatus("Catálogo local · CJ en espera", false);
       return [];
     } finally {
       clearTimeout(timer);
     }
+  }
+
+  window.loadNordicCatalog = async function (config) {
+    const [cj, printify] = await Promise.all([
+      loadCjSelected(config || {}),
+      loadPrintifySelected((config && config.category) || "General")
+    ]);
+    const merged = [...cj, ...printify];
+    if (!merged.length) {
+      setStatus("Catálogo local · proveedores en espera", false);
+      return [];
+    }
+    const parts = [];
+    if (cj.length) parts.push("CJ " + cj.length);
+    if (printify.length) parts.push("Printify " + printify.length);
+    setStatus(parts.join(" + ") + " · " + merged.length + " productos", true);
+    return merged;
   };
 
   window.showGermanDropStatus = function (enabled) {

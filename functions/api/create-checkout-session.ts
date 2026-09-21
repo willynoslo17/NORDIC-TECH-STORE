@@ -1,12 +1,24 @@
-import catalog from "../../catalog/selected-products.json";
+import cjCatalog from "../../catalog/selected-products.json";
+import printifyCatalog from "../../catalog/printify-products.json";
 
 type Env = { STRIPE_SECRET_KEY?: string };
-type CartItem = { id: string | number; quantity: number };
+type CartItem = { id: string | number; quantity: number; sku?: string; provider?: string; name?: string };
 type CheckoutPayload = {
   market: "NO" | "EU" | "PE";
   items: CartItem[];
   email: string;
   order_id: string;
+};
+type CatalogRow = {
+  name?: string;
+  sku?: string;
+  suggestedRetailUsd?: number;
+  supplierPriceUsd?: number;
+  supplier?: string;
+  provider?: string;
+  id?: string | number;
+  printifyProductId?: string;
+  printifyVariantId?: string | number;
 };
 
 const markets = {
@@ -15,16 +27,47 @@ const markets = {
   PE: { currency: "pen", rate: 4.05, shipping: 14 },
 } as const;
 
-const products = new Map(
-  catalog.slice(0, 30).map((product, index) => [
-    String(index + 1),
-    {
-      name: String(product.name).slice(0, 200),
-      sku: String(product.sku || "").slice(0, 100),
-      usd: Number(product.suggestedRetailUsd),
-    },
-  ])
-);
+type ProductEntry = { name: string; sku: string; usd: number; provider: string };
+
+function normalizeProvider(raw: string | undefined): string {
+  const value = String(raw || "").toLowerCase();
+  if (value.includes("printify")) return "printify";
+  if (value.includes("printful")) return "printful";
+  if (value.includes("gelato")) return "gelato";
+  if (value.includes("cj")) return "cj";
+  return value || "cj";
+}
+
+function toEntry(product: CatalogRow): ProductEntry {
+  return {
+    name: String(product.name || "Product").slice(0, 200),
+    sku: String(product.sku || product.printifyVariantId || "").slice(0, 100),
+    usd: Number(product.suggestedRetailUsd || product.supplierPriceUsd || 0),
+    provider: normalizeProvider(product.provider || product.supplier),
+  };
+}
+
+const products = new Map<string, ProductEntry>();
+
+(cjCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
+  const entry = toEntry(product);
+  products.set(String(index + 1), entry);
+  products.set(String(10001 + index), entry);
+  if (product.id != null) products.set(String(product.id), entry);
+  if (entry.sku) products.set(entry.sku, entry);
+});
+
+(printifyCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
+  const entry = toEntry({ ...product, provider: "printify", supplier: "Printify" });
+  products.set(String(20001 + index), entry);
+  if (product.id != null) products.set(String(product.id), entry);
+  if (entry.sku) products.set(entry.sku, entry);
+});
+
+function resolveProduct(item: CartItem): ProductEntry | undefined {
+  return products.get(String(item.id))
+    || (item.sku ? products.get(String(item.sku)) : undefined);
+}
 
 function json(error: string, status: number) {
   return Response.json({ error }, { status });
@@ -45,13 +88,24 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   }
   if (typeof body.email !== "string" || !body.email.includes("@")) return json("Invalid email", 400);
 
-  const lines = body.items.map((item) => {
-    const product = products.get(String(item.id));
-    const quantity = Math.max(1, Math.min(10, Math.trunc(Number(item.quantity) || 0)));
-    if (!product || !Number.isFinite(product.usd) || product.usd <= 0) throw new Error("Invalid product");
-    return { product, quantity, amount: Math.max(50, Math.round(product.usd * market.rate * 100)) };
-  });
+  let lines: { product: ProductEntry; quantity: number; amount: number }[];
+  try {
+    lines = body.items.map((item) => {
+      const product = resolveProduct(item);
+      const quantity = Math.max(1, Math.min(10, Math.trunc(Number(item.quantity) || 0)));
+      if (!product || !Number.isFinite(product.usd) || product.usd <= 0) throw new Error("Invalid product");
+      const provider = normalizeProvider(item.provider || product.provider);
+      return {
+        product: { ...product, provider },
+        quantity,
+        amount: Math.max(50, Math.round(product.usd * market.rate * 100)),
+      };
+    });
+  } catch {
+    return json("Invalid product", 400);
+  }
 
+  const providers = [...new Set(lines.map((line) => line.product.provider))];
   const origin = new URL(context.request.url).origin;
   const params = new URLSearchParams({
     mode: "payment",
@@ -61,6 +115,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     "metadata[store]": "nordic-tech-store",
     "metadata[order_id]": String(body.order_id || "").slice(0, 100),
     "metadata[market]": body.market,
+    "metadata[provider]": providers[0] || "cj",
+    "metadata[providers]": providers.join(",").slice(0, 100),
   });
 
   lines.forEach((line, index) => {
@@ -68,6 +124,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     params.set(`line_items[${index}][price_data][unit_amount]`, String(line.amount));
     params.set(`line_items[${index}][price_data][product_data][name]`, line.product.name);
     params.set(`line_items[${index}][price_data][product_data][metadata][sku]`, line.product.sku);
+    params.set(`line_items[${index}][price_data][product_data][metadata][provider]`, line.product.provider);
     params.set(`line_items[${index}][quantity]`, String(line.quantity));
   });
   const shippingIndex = lines.length;
