@@ -12,8 +12,8 @@
     cj: "catalog/selected-products.json",
     printify: "catalog/printify-selected.json",
     printifyFallback: "catalog/printify-products.json",
-    gelato: "catalog/gelato-products.json",
-    printful: "catalog/printful-products.json"
+    gelato: "catalog/gelato-selected.json",
+    printful: "catalog/printful-selected.json"
   };
   const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
