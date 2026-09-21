@@ -12,7 +12,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 24.9,
     "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-2",
@@ -27,7 +28,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 25.9,
     "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-3",
@@ -42,7 +44,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 23.9,
     "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-4",
@@ -57,7 +60,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 26.9,
     "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-5",
@@ -72,7 +76,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 29.9,
     "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-6",
@@ -87,7 +92,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 28.5,
     "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-7",
@@ -102,7 +108,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 27.9,
     "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-8",
@@ -117,7 +124,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 19.9,
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-9",
@@ -132,7 +140,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 18.9,
     "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-10",
@@ -147,7 +156,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 17.9,
     "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-11",
@@ -162,7 +172,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 26.9,
     "image": "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-12",
@@ -177,7 +188,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 27.5,
     "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-13",
@@ -192,7 +204,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 28.9,
     "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-14",
@@ -207,7 +220,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 27.5,
     "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-15",
@@ -222,7 +236,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 18.5,
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-16",
@@ -237,7 +252,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 27.9,
     "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-17",
@@ -252,7 +268,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 28.5,
     "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-18",
@@ -267,7 +284,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 19.5,
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-19",
@@ -282,7 +300,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 26.5,
     "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-20",
@@ -297,7 +316,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 27.9,
     "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-21",
@@ -312,7 +332,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 17.9,
     "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-22",
@@ -327,7 +348,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 28.9,
     "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-23",
@@ -342,7 +364,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 26.5,
     "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-24",
@@ -357,7 +380,8 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 18.9,
     "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
   },
   {
     "id": "gelato-electronics-25",
@@ -372,7 +396,408 @@ const SELECTED: any[] = [
     "suggestedRetailUsd": 29.5,
     "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch"
+  },
+  {
+    "id": "gelato-electronics-26",
+    "sku": "GEL-TECH-CASE-MATTE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Soft Matte Black",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 26.9,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-27",
+    "sku": "GEL-TECH-TEE-COMMIT",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Commit Message Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 28.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-28",
+    "sku": "GEL-TECH-MUG-OVERFLOW",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Coffee Overflow Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-29",
+    "sku": "GEL-TECH-CASE-BLUE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Blueprint Lines",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 27.5,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-30",
+    "sku": "GEL-TECH-TEE-SHIP2",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Ship Clean Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 27.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-31",
+    "sku": "GEL-TECH-MUG-LATENCY",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Latency Low Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 17.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-32",
+    "sku": "GEL-TECH-CASE-GRAD",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Soft Gradient",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 28.5,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-33",
+    "sku": "GEL-TECH-TEE-DOCS",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Read The Docs Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-34",
+    "sku": "GEL-TECH-MUG-SUDO",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Sudo Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 19.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-35",
+    "sku": "GEL-TECH-CASE-TERM",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Terminal Green",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 29.5,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-36",
+    "sku": "GEL-TECH-TEE-MERGE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Merge Ready Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 29.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-37",
+    "sku": "GEL-TECH-MUG-HELLO",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Hello World Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 16.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-38",
+    "sku": "GEL-TECH-CASE-NIGHT",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Nordic Night",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-39",
+    "sku": "GEL-TECH-TEE-API",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "API First Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 28.9,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-40",
+    "sku": "GEL-TECH-MUG-CACHE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Cache Hit Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.9,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-41",
+    "sku": "GEL-TECH-CASE-SPECKLE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Soft Speckle",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-42",
+    "sku": "GEL-TECH-TEE-OFFLINE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Offline Mode Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 25.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-43",
+    "sku": "GEL-TECH-MUG-PING",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Ping Ok Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 17.9,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-44",
+    "sku": "GEL-TECH-CASE-WIRE",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Wireframe Soft",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 28.9,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-45",
+    "sku": "GEL-TECH-TEE-BUILD",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Build Once Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-46",
+    "sku": "GEL-TECH-MUG-DARK",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Dark Mode Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 19.9,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-47",
+    "sku": "GEL-TECH-CASE-CLOUD",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Soft Cloud",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 25.9,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-48",
+    "sku": "GEL-TECH-TEE-SYNTAX",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Syntax Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 26.9,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-49",
+    "sku": "GEL-TECH-MUG-UPTIME",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Uptime Club Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
+  },
+  {
+    "id": "gelato-electronics-50",
+    "sku": "GEL-TECH-CASE-MONO",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Soft Mono",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 29.9,
+    "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics",
+    "compliance": "EU/Nordic POD merch only \u2014 apparel/poster/mug/tote/case/cap; no cosmetics liquids, no toy CE claims, no health claims"
   }
 ];
 const SECTOR_ALIASES: Record<string, string> = {
@@ -440,7 +865,7 @@ export async function onRequestGet(context: any) {
   const defaultSector = String(SELECTED[0]?.sector || "beauty");
   const sector = resolveSector(wanted || defaultSector);
   const headers = { "access-control-allow-origin": "*", "cache-control": "public, max-age=60" };
-  const products = curated(sector).slice(0, 30);
+  const products = curated(sector).slice(0, 50);
   return Response.json(
     { ok: true, supplier: "gelato", sector, query: sector, products, count: products.length, source: "gelato-selected-primary", markets: ["NO", "EU", "PE"] },
     { status: products.length ? 200 : 503, headers }

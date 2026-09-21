@@ -97,7 +97,7 @@
   async function loadCjSelected(config) {
     const localItems = await loadJson(LOCAL_FILES.cj);
     if (localItems.length) {
-      return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 30);
+      return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 50);
     }
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 7000);
@@ -120,7 +120,7 @@
           sku: item.sku || "",
           supplier: "CJ Dropshipping",
           provider: "cj"
-        })).filter(item => item.base > 0).slice(0, 30);
+        })).filter(item => item.base > 0).slice(0, 50);
     } catch (_) {
       return [];
     } finally {
@@ -132,18 +132,18 @@
     const q = encodeURIComponent(query || "");
     const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q);
     if (apiItems.length) {
-      return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+      return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
     }
     if (provider === "printify") {
       const selected = await loadJson(LOCAL_FILES.printify);
       if (selected.length) {
-        return selected.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+        return selected.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
       }
       const fallback = await loadJson(LOCAL_FILES.printifyFallback);
-      return fallback.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+      return fallback.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
     }
     const localItems = await loadJson(LOCAL_FILES[provider]);
-    return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+    return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
   }
 
   function applyActiveCatalog(supplier) {
