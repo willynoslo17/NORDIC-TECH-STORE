@@ -17,14 +17,14 @@ const SECTOR_ALIASES: Record<string, string> = {
  * first catalogs dominate the ~50 product mix so beauty ≠ auto ≠ kids.
  */
 const SECTOR_CATALOGS: Record<string, string[]> = {
-  beauty: ["tote-bags", "mugs", "posters", "canvas", "apparel"],
-  toys: ["posters", "canvas", "cards", "apparel", "mugs"],
+  beauty: ["tote-bags", "mugs", "canvas", "apparel"],
+  toys: ["posters", "cards", "canvas", "apparel"],
   electronics: ["phone-cases", "apparel", "mugs", "posters"],
   "pet supplies": ["tote-bags", "apparel", "mugs", "posters", "canvas"],
   "home living": ["posters", "canvas", "pillows", "mugs", "tote-bags", "calendars", "framed-posters"],
   fitness: ["apparel", "tote-bags", "posters", "mugs"],
   "solar energy": ["posters", "canvas", "tote-bags", "apparel", "mugs"],
-  "car accessories": ["apparel", "tote-bags", "mugs", "posters", "phone-cases"],
+  "car accessories": ["apparel", "tote-bags", "mugs", "framed-posters"],
 };
 
 /** Sector-specific search offset so overlapping catalogs return different slices. */
@@ -483,41 +483,47 @@ async function loadStoreProducts(headers: Record<string, string>, storeId: strin
 async function loadCatalogProducts(headers: Record<string, string>, sector: string) {
   const available = await listCatalogUids(headers);
   const preferred = SECTOR_CATALOGS[sector] || SECTOR_CATALOGS.beauty;
-  const ordered = [
-    ...preferred.filter((c) => !available.length || available.includes(c)),
-    // Do NOT append every other available catalog — that collapses sector diversity.
-    ...FALLBACK_CATALOGS.filter((c) => !preferred.includes(c) && (!available.length || available.includes(c))),
-  ];
-  const uniqueCatalogs = [...new Set(ordered)];
+  const primary = preferred.filter((c) => !available.length || available.includes(c));
+  const fallback = FALLBACK_CATALOGS.filter((c) => !preferred.includes(c) && (!available.length || available.includes(c)));
+  // Prefer sector catalogs only; unlock fallbacks only if primary yield is thin.
+  let uniqueCatalogs = [...new Set(primary)];
   const baseOffset = SECTOR_OFFSET[sector] || 0;
   const metaCache = new Map<string, CatalogMeta | null>();
   const seenId = new Set<string>();
   const seenFamily = new Set<string>();
   const candidates: { item: any; score: number; catalogUid: string }[] = [];
 
-  for (let ci = 0; ci < uniqueCatalogs.length; ci++) {
-    const catalogUid = uniqueCatalogs[ci];
-    if (candidates.length >= 120) break;
-    if (!metaCache.has(catalogUid)) {
-      metaCache.set(catalogUid, await loadCatalogMeta(headers, catalogUid));
+  async function pullFromCatalogs(catalogs: string[]) {
+    for (let ci = 0; ci < catalogs.length; ci++) {
+      const catalogUid = catalogs[ci];
+      if (candidates.length >= 120) break;
+      if (!metaCache.has(catalogUid)) {
+        metaCache.set(catalogUid, await loadCatalogMeta(headers, catalogUid));
+      }
+      const meta = metaCache.get(catalogUid) || null;
+      const pull = ci < 2 ? 45 : ci < 4 ? 30 : 20;
+      const offset = baseOffset + ci * 17;
+      const products = await searchCatalog(headers, catalogUid, pull, offset);
+      for (const product of products) {
+        const uid = String(product?.productUid || product?.id || "");
+        if (!uid || seenId.has(uid)) continue;
+        const fam = familyKey(uid);
+        if (seenFamily.has(fam)) continue;
+        const score = sectorScore(product, catalogUid, sector);
+        // Hard-skip strongly mismatched products for this sector
+        if (score < 0) continue;
+        seenId.add(uid);
+        seenFamily.add(fam);
+        const item = normalizeCatalogProduct(product, candidates.length, sector, catalogUid, meta);
+        candidates.push({ item, score, catalogUid });
+      }
     }
-    const meta = metaCache.get(catalogUid) || null;
-    // Primary catalogs get larger pulls; later ones fill gaps
-    const pull = ci < 2 ? 40 : ci < 4 ? 25 : 15;
-    const offset = baseOffset + ci * 12;
-    const products = await searchCatalog(headers, catalogUid, pull, offset);
-    for (const product of products) {
-      const uid = String(product?.productUid || product?.id || "");
-      if (!uid || seenId.has(uid)) continue;
-      const fam = familyKey(uid);
-      // One representative per product family (color/size variants collapsed)
-      if (seenFamily.has(fam)) continue;
-      seenId.add(uid);
-      seenFamily.add(fam);
-      const item = normalizeCatalogProduct(product, candidates.length, sector, catalogUid, meta);
-      const score = sectorScore(product, catalogUid, sector);
-      candidates.push({ item, score, catalogUid });
-    }
+  }
+
+  await pullFromCatalogs(uniqueCatalogs);
+  if (candidates.length < 40) {
+    uniqueCatalogs = [...new Set([...uniqueCatalogs, ...fallback])];
+    await pullFromCatalogs(fallback);
   }
 
   // Rank by sector fit, then take top 50 with family + display-name diversity
