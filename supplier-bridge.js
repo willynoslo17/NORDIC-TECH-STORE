@@ -12,11 +12,17 @@
     cj: "catalog/selected-products.json",
     printify: "catalog/printify-selected.json",
     printifyFallback: "catalog/printify-products.json",
-    gelato: "catalog/gelato-selected.json",
-    printful: "catalog/printful-selected.json"
+    gelato: "catalog/gelato-products.json",
+    printful: "catalog/printful-products.json"
   };
   const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
+  const BRAND_COLORS = {
+    cj: "#0f766e",
+    printify: "#7c3aed",
+    gelato: "#ea580c",
+    printful: "#2563eb"
+  };
 
   window.nordicCatalogs = { cj: [], printify: [], gelato: [], printful: [] };
   window.nordicActiveSupplier = "cj";
@@ -47,20 +53,26 @@
   function curated(item, index, category, provider) {
     const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || item.base || 0);
     const baseId = ID_BASE[provider] || 90001;
+    const numericId = item.id != null && Number.isFinite(Number(item.id)) ? Number(item.id) : null;
     const out = {
-      id: item.id != null && Number.isFinite(Number(item.id)) ? Number(item.id) : baseId + index,
+      id: numericId != null ? numericId : baseId + index,
+      externalId: String(item.id || item.gelatoProductUid || item.printfulProductId || item.printifyProductId || ""),
       name: item.name || (LABELS[provider] || "Supplier") + " product",
       cat: item.category || item.cat || category,
       base: amount > 0 ? amount : 0,
       v: "v" + ((index % 4) + 1),
       tag: LABELS[provider] || provider,
+      brand: item.brand || LABELS[provider] || provider,
       image: item.image || "",
       sku: item.sku || "",
       supplier: item.supplier || LABELS[provider] || provider,
-      provider: provider
+      provider: provider,
+      badgeColor: BRAND_COLORS[provider] || "#334155"
     };
     if (item.printifyProductId) out.printifyProductId = item.printifyProductId;
     if (item.printifyVariantId) out.printifyVariantId = item.printifyVariantId;
+    if (item.printfulProductId) out.printfulProductId = item.printfulProductId;
+    if (item.gelatoProductUid) out.gelatoProductUid = item.gelatoProductUid;
     return out;
   }
 
@@ -79,7 +91,7 @@
 
   async function loadApiProducts(endpoint) {
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), 8000);
+    const timer = setTimeout(() => timeout.abort(), 20000);
     try {
       const response = await fetch(endpoint, { signal: timeout.signal, cache: "no-store" });
       if (!response.ok) return [];
@@ -116,10 +128,12 @@
           base: price(item.sellPrice || item.nowPrice),
           v: "v" + ((index % 4) + 1),
           tag: "CJ",
+          brand: "CJ Dropshipping",
           image: item.bigImage || item.image || "",
           sku: item.sku || "",
           supplier: "CJ Dropshipping",
-          provider: "cj"
+          provider: "cj",
+          badgeColor: BRAND_COLORS.cj
         })).filter(item => item.base > 0).slice(0, 50);
     } catch (_) {
       return [];
@@ -134,6 +148,7 @@
     if (apiItems.length) {
       return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
     }
+    // Printify may still use curated selected JSON. Gelato/Printful NEVER use *-selected clones.
     if (provider === "printify") {
       const selected = await loadJson(LOCAL_FILES.printify);
       if (selected.length) {
@@ -142,8 +157,23 @@
       const fallback = await loadJson(LOCAL_FILES.printifyFallback);
       return fallback.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
     }
+    // Empty local fallback only (never gelato-selected / printful-selected)
     const localItems = await loadJson(LOCAL_FILES[provider]);
     return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
+  }
+
+  function decorateProductCards(provider) {
+    const color = BRAND_COLORS[provider] || "#334155";
+    const label = LABELS[provider] || provider;
+    document.querySelectorAll("[data-product-card], .product-card, .card, article.product").forEach((card) => {
+      if (card.querySelector("[data-provider-badge]")) return;
+      const badge = document.createElement("span");
+      badge.dataset.providerBadge = provider;
+      badge.textContent = label;
+      badge.style.cssText = "display:inline-block;margin:6px 0 0;padding:3px 8px;border-radius:999px;font:700 10px/1 Inter,Arial,sans-serif;letter-spacing:.02em;color:#fff;background:" + color;
+      const title = card.querySelector("h3,h4,.title,.name") || card;
+      title.appendChild(badge);
+    });
   }
 
   function applyActiveCatalog(supplier) {
@@ -157,7 +187,7 @@
     }
     if (typeof data !== "undefined") {
       try {
-        data = list.map(x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key }));
+        data = list.map(x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key, brand: x.brand || LABELS[key] }));
       } catch (_) {}
     }
     if (typeof filter !== "undefined") { try { filter = "All"; } catch (_) {} }
@@ -172,9 +202,19 @@
       const active = btn.getAttribute("data-supplier-switch") === key;
       btn.classList.toggle("active", active);
       btn.setAttribute("aria-pressed", active ? "true" : "false");
+      if (active) {
+        btn.style.outline = "2px solid " + (BRAND_COLORS[key] || "#fff");
+        btn.style.background = BRAND_COLORS[key] || "";
+        btn.style.color = "#fff";
+      } else {
+        btn.style.outline = "";
+        btn.style.background = "";
+        btn.style.color = "";
+      }
     });
     const count = list.length;
     setStatus(LABELS[key] + " · " + count + " productos", count > 0);
+    setTimeout(() => decorateProductCards(key), 50);
     return list;
   }
 
@@ -191,6 +231,7 @@
       btn.className = "chip" + (key === "cj" ? " active" : "");
       btn.dataset.supplierSwitch = key;
       btn.textContent = LABELS[key];
+      btn.title = LABELS[key] + " catalog";
       btn.setAttribute("aria-pressed", key === "cj" ? "true" : "false");
       btn.onclick = () => applyActiveCatalog(key);
       bar.appendChild(btn);

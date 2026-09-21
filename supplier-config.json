@@ -19,7 +19,7 @@
     "shopId": "28847802",
     "catalogMode": "live-sector-with-selected",
     "catalogFile": "catalog/printify-selected.json",
-    "note": "Sector-filtered Printify catalog mirrors CJ q=; printify-selected.json is the per-store curated set (~12 items).",
+    "note": "Sector-filtered Printify catalog mirrors CJ q=; printify-selected.json is the per-store curated set (~12 items). Printify left as-is this ship. Printify left as-is this ship. Printify left as-is this ship. Printify left as-is this ship.",
     "sectorQuery": "electronics",
     "matchTypes": [
       "case",
@@ -29,16 +29,16 @@
   },
   "gelato": {
     "enabled": true,
-    "catalogMode": "live-sector-with-local-fallback",
+    "catalogMode": "live-api-primary",
     "catalogFile": "catalog/gelato-products.json",
-    "note": "Live Gelato API via GELATO_API_KEY; local JSON is empty fallback only.",
+    "note": "Live Gelato API via GELATO_API_KEY (store first, then public catalog). Local JSON is empty fallback only — never selected clones.",
     "sectorQuery": "electronics"
   },
   "printful": {
     "enabled": true,
-    "catalogMode": "live-sector-with-local-fallback",
+    "catalogMode": "live-api-primary",
     "catalogFile": "catalog/printful-products.json",
-    "note": "Live Printful API via PRINTFUL_API_TOKEN; local JSON is empty fallback only.",
+    "note": "Live Printful API via PRINTFUL_API_TOKEN (store first, then public catalog). Local JSON is empty fallback only — never selected clones.",
     "sectorQuery": "electronics"
   }
 }
