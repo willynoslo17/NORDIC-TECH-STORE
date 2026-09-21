@@ -153,16 +153,20 @@ function titleFromAttributes(product: any, meta?: CatalogMeta | null): string {
   const attrs = product?.attributes;
   if (!attrs || typeof attrs !== "object") return "";
   const preferKeys = [
-    "GarmentStyle", "ProductType", "ProductStyle", "Style", "Type",
-    "Category", "Model", "Format", "PhoneModel", "PaperFormat",
+    "GarmentStyle", "ProductType", "ProductStyle", "Style", "Type", "BagType",
+    "Category", "Model", "PhoneModel", "PaperFormat", "Format", "ProductName",
   ];
-  const colorKeys = ["Color", "Colour", "GarmentColor", "ProductColor"];
+  const colorKeys = ["Color", "Colour", "GarmentColor", "ProductColor", "BagColor"];
+  const brandKeys = ["Brand", "Manufacturer", "Mpn", "MPN"];
+  const skipKey = /status|protection|coating|spot|variable|orientation|print|colortype|color_type|pagetype/i;
   const parts: string[] = [];
   const used = new Set<string>();
 
   const resolve = (val: string) => {
     const v = String(val || "").trim();
     if (!v || v === "none" || v === "no") return "";
+    // Skip print-process codes like 4-0 / 4-4
+    if (/^\d+-\d+$/.test(v)) return "";
     if (meta?.valueTitles?.[v]) return meta.valueTitles[v];
     return humanizeToken(v);
   };
@@ -185,10 +189,18 @@ function titleFromAttributes(product: any, meta?: CatalogMeta | null): string {
       }
     }
   }
-  // Fill from remaining meaningful attributes
+  for (const key of brandKeys) {
+    if (attrs[key] != null) {
+      const t = resolve(String(attrs[key]));
+      if (t && !used.has(t.toLowerCase())) {
+        parts.push(t);
+        used.add(t.toLowerCase());
+      }
+    }
+  }
   if (parts.length < 2) {
     for (const [k, v] of Object.entries(attrs)) {
-      if (/status|protection|coating|spot|variable|orientation|print/i.test(k)) continue;
+      if (skipKey.test(k)) continue;
       const t = resolve(String(v));
       if (t && !used.has(t.toLowerCase())) {
         parts.push(t);
@@ -279,10 +291,18 @@ function prettyTitle(productUid: string, catalogUid: string, product: any, meta?
   const fromField = fieldTitle(product);
   if (fromField) return fromField;
   const fromAttrs = titleFromAttributes(product, meta);
+  const cat = catalogLabel(catalogUid, meta);
   if (fromAttrs) {
-    const cat = catalogLabel(catalogUid, meta);
-    // Avoid "Apparel · Beanie" duplication if attr already names product
-    return fromAttrs.toLowerCase().includes(cat.toLowerCase()) ? fromAttrs : `${cat} ${fromAttrs}`.trim();
+    const lower = fromAttrs.toLowerCase();
+    const catLower = cat.toLowerCase();
+    // If attrs already describe the product (tote bag, iphone, poster size…), skip catalog prefix
+    if (lower.includes(catLower) || /tote|mug|poster|canvas|case|hoodie|tee|beanie|cap|pillow/i.test(fromAttrs)) {
+      return fromAttrs;
+    }
+    // Singularize catalog label for cleaner "Apparel Butter" → keep short cat as type hint only when needed
+    const shortCat = cat.replace(/s$/i, "");
+    if (lower.includes(shortCat.toLowerCase())) return fromAttrs;
+    return `${shortCat} · ${fromAttrs}`.trim();
   }
   return titleFromUid(productUid, catalogUid, meta);
 }
@@ -495,25 +515,33 @@ async function loadCatalogProducts(headers: Record<string, string>, sector: stri
     }
   }
 
-  // Rank by sector fit, then take top 50 with family diversity enforced again
+  // Rank by sector fit, then take top 50 with family + display-name diversity
   candidates.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name));
   const out: any[] = [];
   const outFamilies = new Set<string>();
+  const outNames = new Set<string>();
   for (const c of candidates) {
     const fam = familyKey(c.item.id);
-    if (outFamilies.has(fam)) continue;
-    // Soft reject strongly negative scores unless we are short
+    const nameKey = String(c.item.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    if (outFamilies.has(fam) || (nameKey && outNames.has(nameKey))) continue;
     if (c.score < -2 && out.length >= 20) continue;
     outFamilies.add(fam);
+    if (nameKey) outNames.add(nameKey);
     out.push(c.item);
     if (out.length >= 50) break;
   }
 
-  // Backfill if sector filters were too aggressive
-  if (out.length < 40) {
-    for (const c of candidates) {
-      if (out.some((p) => p.id === c.item.id)) continue;
-      out.push(c.item);
+  // Backfill if sector filters were too aggressive (prefer still-unique names first)
+  if (out.length < 50) {
+    for (const preferUnique of [true, false]) {
+      for (const c of candidates) {
+        if (out.some((p) => p.id === c.item.id)) continue;
+        const nameKey = String(c.item.name || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+        if (preferUnique && nameKey && outNames.has(nameKey)) continue;
+        if (nameKey) outNames.add(nameKey);
+        out.push(c.item);
+        if (out.length >= 50) break;
+      }
       if (out.length >= 50) break;
     }
   }
