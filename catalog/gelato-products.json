@@ -12,7 +12,8 @@
     "suggestedRetailUsd": 24.9,
     "image": "https://images.unsplash.com/photo-1511707171634-5f897ff02aa9?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-2",
@@ -27,7 +28,8 @@
     "suggestedRetailUsd": 25.9,
     "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-3",
@@ -42,7 +44,8 @@
     "suggestedRetailUsd": 23.9,
     "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-4",
@@ -57,7 +60,8 @@
     "suggestedRetailUsd": 26.9,
     "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-5",
@@ -72,7 +76,8 @@
     "suggestedRetailUsd": 29.9,
     "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-6",
@@ -87,7 +92,8 @@
     "suggestedRetailUsd": 28.5,
     "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-7",
@@ -102,7 +108,8 @@
     "suggestedRetailUsd": 27.9,
     "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-8",
@@ -117,7 +124,8 @@
     "suggestedRetailUsd": 19.9,
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-9",
@@ -132,7 +140,8 @@
     "suggestedRetailUsd": 18.9,
     "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-10",
@@ -147,7 +156,8 @@
     "suggestedRetailUsd": 17.9,
     "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-11",
@@ -162,7 +172,8 @@
     "suggestedRetailUsd": 26.9,
     "image": "https://images.unsplash.com/photo-1503342217505-b0a15ec3261c?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-12",
@@ -177,7 +188,8 @@
     "suggestedRetailUsd": 27.5,
     "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-13",
@@ -192,7 +204,8 @@
     "suggestedRetailUsd": 28.9,
     "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
     "matchType": "case",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-14",
@@ -207,7 +220,8 @@
     "suggestedRetailUsd": 27.5,
     "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
     "matchType": "tee",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
   },
   {
     "id": "gelato-electronics-15",
@@ -222,6 +236,257 @@
     "suggestedRetailUsd": 18.5,
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
-    "sector": "electronics"
+    "sector": "electronics",
+    "printifyShopId": "28847802"
+  },
+  {
+    "id": "gelato-electronics-16",
+    "sku": "GEL-TECH-CASE-NEON",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "case",
+    "matchTypes": [
+      "case",
+      "tee",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Neon Circuit",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 27.9,
+    "priceNOK": 315,
+    "priceEUR": 27.9,
+    "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-17",
+    "sku": "GEL-TECH-TEE-BINARY",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "tee",
+    "matchTypes": [
+      "tee",
+      "case",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Binary Dreams Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 28.5,
+    "priceNOK": 322,
+    "priceEUR": 28.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-18",
+    "sku": "GEL-TECH-MUG-ROOT",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "mug",
+    "matchTypes": [
+      "mug",
+      "case",
+      "tee"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Root Access Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 19.5,
+    "priceNOK": 220,
+    "priceEUR": 19.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-19",
+    "sku": "GEL-TECH-CASE-CARBON",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "case",
+    "matchTypes": [
+      "case",
+      "tee",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Carbon Grid",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 26.5,
+    "priceNOK": 299,
+    "priceEUR": 26.5,
+    "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-20",
+    "sku": "GEL-TECH-TEE-DEPLOY",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "tee",
+    "matchTypes": [
+      "tee",
+      "case",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Deploy Friday Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 27.9,
+    "priceNOK": 315,
+    "priceEUR": 27.9,
+    "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-21",
+    "sku": "GEL-TECH-MUG-NULL",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "mug",
+    "matchTypes": [
+      "mug",
+      "case",
+      "tee"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Null Pointer Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 17.9,
+    "priceNOK": 202,
+    "priceEUR": 17.9,
+    "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-22",
+    "sku": "GEL-TECH-CASE-AURORA2",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "case",
+    "matchTypes": [
+      "case",
+      "tee",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Aurora Code",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 28.9,
+    "priceNOK": 327,
+    "priceEUR": 28.9,
+    "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-23",
+    "sku": "GEL-TECH-TEE-OSS",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "tee",
+    "matchTypes": [
+      "tee",
+      "case",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Open Source Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 26.5,
+    "priceNOK": 299,
+    "priceEUR": 26.5,
+    "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-24",
+    "sku": "GEL-TECH-MUG-KERNEL",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "mug",
+    "matchTypes": [
+      "mug",
+      "case",
+      "tee"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Kernel Panic Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.9,
+    "priceNOK": 214,
+    "priceEUR": 18.9,
+    "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
+  },
+  {
+    "id": "gelato-electronics-25",
+    "sku": "GEL-TECH-CASE-PIXEL2",
+    "supplier": "Gelato",
+    "provider": "gelato",
+    "sector": "electronics",
+    "matchType": "case",
+    "matchTypes": [
+      "case",
+      "tee",
+      "mug"
+    ],
+    "printifyShopId": "28847802",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Pixel Storm",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 29.5,
+    "priceNOK": 333,
+    "priceEUR": 29.5,
+    "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
+    "status": "sector-selected-curated",
+    "notes": "Sector electronics curated Printify-facing item."
   }
 ]

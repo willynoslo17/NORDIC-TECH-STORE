@@ -1,6 +1,5 @@
 const BASE = "https://api.printify.com/v1";
 
-// Per-store curated catalog — PRIMARY source for storefront (never replace with shared shop dump)
 const SELECTED: any[] = [
   {
     "id": "printify-electronics-1",
@@ -226,6 +225,156 @@ const SELECTED: any[] = [
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
     "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-16",
+    "sku": "PFY-TECH-CASE-NEON",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Neon Circuit",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-17",
+    "sku": "PFY-TECH-TEE-BINARY",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Binary Dreams Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 28.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-18",
+    "sku": "PFY-TECH-MUG-ROOT",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Root Access Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 19.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-19",
+    "sku": "PFY-TECH-CASE-CARBON",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Carbon Grid",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-20",
+    "sku": "PFY-TECH-TEE-DEPLOY",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Deploy Friday Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-21",
+    "sku": "PFY-TECH-MUG-NULL",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Null Pointer Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 17.9,
+    "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-22",
+    "sku": "PFY-TECH-CASE-AURORA2",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Aurora Code",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 28.9,
+    "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-23",
+    "sku": "PFY-TECH-TEE-OSS",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Open Source Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-24",
+    "sku": "PFY-TECH-MUG-KERNEL",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Kernel Panic Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.9,
+    "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printify-electronics-25",
+    "sku": "PFY-TECH-CASE-PIXEL2",
+    "supplier": "Printify",
+    "provider": "printify",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Pixel Storm",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 29.5,
+    "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
   }
 ];
 
@@ -310,18 +459,11 @@ async function enrichFromLive(token: string, shopId: string, curatedProducts: an
     const result: any = await response.json();
     const list = Array.isArray(result?.data) ? result.data : Array.isArray(result) ? result : [];
     if (!list.length) return curatedProducts;
-
     const typeWords: Record<string, string[]> = {
-      tote: ["tote", "bag"],
-      tee: ["t-shirt", "tshirt", "tee", "shirt"],
-      mug: ["mug", "cup", "coffee"],
-      crewneck: ["crewneck", "crew neck", "sweatshirt"],
-      hoodie: ["hoodie", "zip"],
-      poster: ["poster", "print"],
-      case: ["case", "phone", "tough"],
-      cap: ["cap", "hat"],
+      tote: ["tote", "bag"], tee: ["t-shirt", "tshirt", "tee", "shirt"], mug: ["mug", "cup", "coffee"],
+      crewneck: ["crewneck", "crew neck", "sweatshirt"], hoodie: ["hoodie", "zip"],
+      poster: ["poster", "print"], case: ["case", "phone", "tough"], cap: ["cap", "hat"],
     };
-
     return curatedProducts.map((item) => {
       const words = typeWords[String(item.matchType || "").toLowerCase()] || [];
       const match = list.find((live: any) => {
@@ -359,30 +501,15 @@ export async function onRequestGet(context: any) {
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
   const defaultSector = String(SELECTED[0]?.sector || "beauty");
   const sector = resolveSector(wanted || defaultSector);
-  const headers = {
-    "access-control-allow-origin": "*",
-    "cache-control": "public, max-age=60",
-  };
-
-  // PRIMARY: curated per-store list. Live Printify only enriches — never replaces.
+  const headers = { "access-control-allow-origin": "*", "cache-control": "public, max-age=60" };
   let products = curated(sector).slice(0, 30);
   const token = context.env.PRINTIFY_API_TOKEN;
   const shopId = context.env.PRINTIFY_SHOP_ID || "28847802";
   if (token && products.length) {
     products = await enrichFromLive(String(token), String(shopId), products);
   }
-
   return Response.json(
-    {
-      ok: true,
-      supplier: "printify",
-      sector,
-      query: sector,
-      products,
-      count: products.length,
-      source: "printify-selected-primary",
-      markets: ["NO", "EU", "PE"],
-    },
+    { ok: true, supplier: "printify", sector, query: sector, products, count: products.length, source: "printify-selected-primary", markets: ["NO", "EU", "PE"] },
     { status: products.length ? 200 : 503, headers }
   );
 }

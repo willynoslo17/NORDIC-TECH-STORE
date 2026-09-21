@@ -223,9 +223,158 @@ const SELECTED: any[] = [
     "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
     "matchType": "mug",
     "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-16",
+    "sku": "PFL-TECH-CASE-NEON",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Neon Circuit",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1518770660439-4636190af475?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-17",
+    "sku": "PFL-TECH-TEE-BINARY",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Binary Dreams Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 28.5,
+    "image": "https://images.unsplash.com/photo-1521572163474-6864f9cf17ab?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-18",
+    "sku": "PFL-TECH-MUG-ROOT",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Root Access Coffee Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 19.5,
+    "image": "https://images.unsplash.com/photo-1514228742587-6b1558fcc036?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-19",
+    "sku": "PFL-TECH-CASE-CARBON",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Carbon Grid",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-20",
+    "sku": "PFL-TECH-TEE-DEPLOY",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Deploy Friday Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 27.9,
+    "image": "https://images.unsplash.com/photo-1583743814966-8936f5b7be1a?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-21",
+    "sku": "PFL-TECH-MUG-NULL",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Null Pointer Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 17.9,
+    "image": "https://images.unsplash.com/photo-1572116469696-31de0f17cc34?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-22",
+    "sku": "PFL-TECH-CASE-AURORA2",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Aurora Code",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 28.9,
+    "image": "https://images.unsplash.com/photo-1556656793-08538906a9f8?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-23",
+    "sku": "PFL-TECH-TEE-OSS",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Open Source Soft Tee",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 9.4,
+    "suggestedRetailUsd": 26.5,
+    "image": "https://images.unsplash.com/photo-1576566588028-4147f3842f27?auto=format&fit=crop&w=800&q=80",
+    "matchType": "tee",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-24",
+    "sku": "PFL-TECH-MUG-KERNEL",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Kernel Panic Mug",
+    "category": "Tech Merch",
+    "supplierPriceUsd": 6.5,
+    "suggestedRetailUsd": 18.9,
+    "image": "https://images.unsplash.com/photo-1513558161293-cdaf765ed2fd?auto=format&fit=crop&w=800&q=80",
+    "matchType": "mug",
+    "sector": "electronics"
+  },
+  {
+    "id": "printful-electronics-25",
+    "sku": "PFL-TECH-CASE-PIXEL2",
+    "supplier": "Printful",
+    "provider": "printful",
+    "printifyProductId": "",
+    "printifyVariantId": "",
+    "name": "Tough Case \u2014 Pixel Storm",
+    "category": "Accessories",
+    "supplierPriceUsd": 8.8,
+    "suggestedRetailUsd": 29.5,
+    "image": "https://images.unsplash.com/photo-1592899677977-9c10ca588bbd?auto=format&fit=crop&w=800&q=80",
+    "matchType": "case",
+    "sector": "electronics"
   }
 ];
-
 const SECTOR_ALIASES: Record<string, string> = {
   "beauty": "beauty",
   "perfume": "beauty",
@@ -255,12 +404,10 @@ const SECTOR_ALIASES: Record<string, string> = {
   "auto": "car accessories",
   "automotive": "car accessories"
 };
-
 function money(value: unknown) {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0;
 }
-
 function resolveSector(raw: string) {
   const key = String(raw || "").toLowerCase().trim();
   if (!key) return SELECTED[0]?.sector || "beauty";
@@ -270,7 +417,6 @@ function resolveSector(raw: string) {
   }
   return key;
 }
-
 function curated(sector: string) {
   return SELECTED
     .filter((p) => !p.sector || String(p.sector).toLowerCase() === sector)
@@ -288,7 +434,6 @@ function curated(sector: string) {
     }))
     .filter((p) => p.suggestedRetailUsd > 0 && p.name);
 }
-
 export async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
@@ -297,16 +442,7 @@ export async function onRequestGet(context: any) {
   const headers = { "access-control-allow-origin": "*", "cache-control": "public, max-age=60" };
   const products = curated(sector).slice(0, 30);
   return Response.json(
-    {
-      ok: true,
-      supplier: "printful",
-      sector,
-      query: sector,
-      products,
-      count: products.length,
-      source: "printful-selected-primary",
-      markets: ["NO", "EU", "PE"],
-    },
+    { ok: true, supplier: "printful", sector, query: sector, products, count: products.length, source: "printful-selected-primary", markets: ["NO", "EU", "PE"] },
     { status: products.length ? 200 : 503, headers }
   );
 }
