@@ -6,7 +6,7 @@
 const BASE = "https://developers.cjdropshipping.com/api2.0/v1";
 const STOREFRONT_CAP = 150;
 const FETCH_SIZE = 20;
-const PAGES_PER_KEYWORD = 2;
+const PAGES_PER_KEYWORD = 3;
 const CJ_LIVE_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-products";
 
 type StoreProfile = {
@@ -194,42 +194,33 @@ async function collectWinners(token: string, primaryQuery: string) {
     new Set([primaryQuery, ...fromMap].map((k) => k.trim().toLowerCase()).filter(Boolean))
   ).slice(0, 5);
 
-  const jobs: { keyword: string; page: number }[] = [];
-  for (const keyword of keywords) {
-    for (let page = 1; page <= PAGES_PER_KEYWORD; page++) {
-      jobs.push({ keyword, page });
-    }
-  }
-
-  const results = await Promise.all(
-    jobs.map(async (job) => {
-      try {
-        const data = await fetchPage(token, job.keyword, job.page);
-        return { ...job, data };
-      } catch (_) {
-        return { ...job, data: null as any };
-      }
-    })
-  );
-
   let totalRecords = 0;
   const byId = new Map<string, any>();
-  for (const row of results) {
-    const data = row.data;
-    if (!data) continue;
-    if (row.keyword === primaryQuery && row.page === 1) {
-      totalRecords = Number(data?.totalRecords) || totalRecords;
-    }
-    if (!totalRecords && data?.totalRecords) totalRecords = Number(data.totalRecords) || 0;
-    for (const item of flatten(data)) {
-      const id = String(item?.id || item?.sku || "");
-      if (!id) continue;
-      if (!item.bigImage) continue;
-      const price = parsePrice(item.sellPrice || item.nowPrice);
-      if (price <= 0 || price > 1000) continue;
-      if (blocked(String(item.nameEn || item.name || ""))) continue;
-      const prev = byId.get(id);
-      if (!prev || score(item) > score(prev)) byId.set(id, item);
+
+  // Sequential fetches — CJ rate-limits aggressive parallel listV2 calls.
+  for (const keyword of keywords) {
+    for (let page = 1; page <= PAGES_PER_KEYWORD; page++) {
+      try {
+        const data = await fetchPage(token, keyword, page);
+        if (keyword === primaryQuery && page === 1) {
+          totalRecords = Number(data?.totalRecords) || totalRecords;
+        }
+        if (!totalRecords && data?.totalRecords) totalRecords = Number(data.totalRecords) || 0;
+        for (const item of flatten(data)) {
+          const id = String(item?.id || item?.sku || "");
+          if (!id) continue;
+          if (!item.bigImage) continue;
+          const price = parsePrice(item.sellPrice || item.nowPrice);
+          if (price <= 0 || price > 1000) continue;
+          if (blocked(String(item.nameEn || item.name || ""))) continue;
+          const prev = byId.get(id);
+          if (!prev || score(item) > score(prev)) byId.set(id, item);
+        }
+        const pages = Number(data?.totalPages) || 1;
+        if (page >= pages) break;
+      } catch (_) {
+        break;
+      }
     }
   }
 
