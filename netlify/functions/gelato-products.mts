@@ -158,16 +158,21 @@ function titleFromAttributes(product: any, meta?: CatalogMeta | null): string {
   ];
   const colorKeys = ["Color", "Colour", "GarmentColor", "ProductColor", "BagColor"];
   const brandKeys = ["Brand", "Manufacturer", "Mpn", "MPN"];
-  const skipKey = /status|protection|coating|spot|variable|orientation|print|colortype|color_type|pagetype/i;
+  const skipKey = /status|protection|coating|spot|variable|orientation|print|colortype|color_type|pagetype|availability|productstatus/i;
   const parts: string[] = [];
   const used = new Set<string>();
 
   const resolve = (val: string) => {
     const v = String(val || "").trim();
     if (!v || v === "none" || v === "no") return "";
-    // Skip print-process codes like 4-0 / 4-4
+    // Skip print-process codes like 4-0 / 4-4 and status labels
     if (/^\d+-\d+$/.test(v)) return "";
-    if (meta?.valueTitles?.[v]) return meta.valueTitles[v];
+    if (/^(published|activated|active|inactive|draft)$/i.test(v)) return "";
+    const mapped = meta?.valueTitles?.[v];
+    if (mapped) {
+      if (/^(published|activated|active|inactive|draft|none)$/i.test(mapped)) return "";
+      return mapped;
+    }
     return humanizeToken(v);
   };
 
