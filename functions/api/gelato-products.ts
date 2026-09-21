@@ -12,19 +12,86 @@ const SECTOR_ALIASES: Record<string, string> = {
   "car accessories": "car accessories", car: "car accessories", auto: "car accessories", automotive: "car accessories",
 };
 
-/** Preferred Gelato catalog UIDs per sector (POD merch). Unknown UIDs are skipped. */
+/**
+ * Preferred Gelato catalog UIDs per sector (POD merch). Order matters —
+ * first catalogs dominate the ~50 product mix so beauty ≠ auto ≠ kids.
+ */
 const SECTOR_CATALOGS: Record<string, string[]> = {
-  beauty: ["apparel", "tote-bags", "mugs", "posters", "canvas"],
-  toys: ["posters", "apparel", "canvas", "cards"],
+  beauty: ["tote-bags", "mugs", "posters", "canvas", "apparel"],
+  toys: ["posters", "canvas", "cards", "apparel", "mugs"],
   electronics: ["phone-cases", "apparel", "mugs", "posters"],
-  "pet supplies": ["apparel", "tote-bags", "mugs", "posters"],
-  "home living": ["posters", "canvas", "mugs", "tote-bags", "apparel", "pillows"],
+  "pet supplies": ["tote-bags", "apparel", "mugs", "posters", "canvas"],
+  "home living": ["posters", "canvas", "pillows", "mugs", "tote-bags", "calendars", "framed-posters"],
   fitness: ["apparel", "tote-bags", "posters", "mugs"],
-  "solar energy": ["posters", "tote-bags", "apparel", "canvas"],
-  "car accessories": ["apparel", "tote-bags", "posters", "mugs"],
+  "solar energy": ["posters", "canvas", "tote-bags", "apparel", "mugs"],
+  "car accessories": ["apparel", "tote-bags", "mugs", "posters", "phone-cases"],
 };
 
-const FALLBACK_CATALOGS = ["posters", "apparel", "mugs", "canvas", "cards", "tote-bags", "phone-cases", "pillows", "calendars", "framed-posters"];
+/** Sector-specific search offset so overlapping catalogs return different slices. */
+const SECTOR_OFFSET: Record<string, number> = {
+  beauty: 0,
+  toys: 35,
+  electronics: 0,
+  "pet supplies": 70,
+  "home living": 15,
+  fitness: 110,
+  "solar energy": 55,
+  "car accessories": 180,
+};
+
+/** Prefer / avoid tokens inside productUid + attributes for sector fit. */
+const SECTOR_HINTS: Record<string, { prefer: string[]; avoid: string[] }> = {
+  beauty: {
+    prefer: ["tote", "mug", "poster", "canvas", "pouch", "bag", "scarf", "tee", "t-shirt", "hoodie", "sweat"],
+    avoid: ["baby", "beanie", "kids", "phone", "case", "infant", "toddler"],
+  },
+  toys: {
+    prefer: ["poster", "canvas", "card", "kids", "baby", "hoodie", "tee", "mug"],
+    avoid: ["phone", "case", "adult"],
+  },
+  electronics: {
+    prefer: ["phone", "case", "mug", "poster", "tee"],
+    avoid: ["baby", "beanie", "infant", "toddler"],
+  },
+  "pet supplies": {
+    prefer: ["tote", "mug", "poster", "hoodie", "tee", "canvas", "bandana"],
+    avoid: ["phone", "case", "infant"],
+  },
+  "home living": {
+    prefer: ["poster", "canvas", "pillow", "mug", "tote", "calendar", "framed"],
+    avoid: ["beanie", "phone", "baby", "infant"],
+  },
+  fitness: {
+    prefer: ["tee", "t-shirt", "hoodie", "tank", "sport", "tote", "mug", "poster", "sweat"],
+    avoid: ["baby", "beanie", "infant", "phone", "toddler"],
+  },
+  "solar energy": {
+    prefer: ["poster", "canvas", "tote", "tee", "mug", "hoodie"],
+    avoid: ["baby", "beanie", "phone", "infant", "toddler"],
+  },
+  "car accessories": {
+    prefer: ["cap", "hat", "hoodie", "tee", "mug", "tote", "poster", "trucker", "snapback"],
+    avoid: ["baby", "beanie", "kids", "infant", "toddler", "organic-baby"],
+  },
+};
+
+const FALLBACK_CATALOGS = [
+  "posters", "apparel", "mugs", "canvas", "cards", "tote-bags",
+  "phone-cases", "pillows", "calendars", "framed-posters",
+];
+
+/** UID attribute key codes Gelato embeds — never dump these into titles. */
+const UID_ATTR_KEYS = new Set([
+  "gca", "gsc", "gcu", "gqa", "gsi", "gco", "gpr", "gfa", "gty", "gst", "gmo", "gpl",
+]);
+const UID_NOISE = new Set([
+  "product", "products", "apparel", "catalog", "item", "uid", "gelato",
+]);
+
+type CatalogMeta = {
+  title: string;
+  valueTitles: Record<string, string>;
+};
 
 function money(value: unknown) {
   const amount = Number(value);
@@ -41,16 +108,183 @@ function resolveSector(raw: string) {
   return SECTOR_CATALOGS[key] ? key : "beauty";
 }
 
-function prettyTitle(productUid: string, catalogUid: string, product: any) {
-  if (product?.title) return String(product.title);
-  if (product?.name) return String(product.name);
-  const bits = String(productUid || "").split("_").filter(Boolean);
-  const human = bits
-    .slice(0, 6)
-    .map((b) => b.replace(/-/g, " "))
-    .join(" · ");
-  const cat = String(catalogUid || "Gelato").replace(/-/g, " ");
-  return human ? `${cat}: ${human}` : `Gelato ${cat} product`;
+function humanizeToken(raw: string) {
+  return String(raw || "")
+    .replace(/[_/]+/g, "-")
+    .split("-")
+    .filter(Boolean)
+    .map((w) => {
+      if (/^\d/.test(w)) return w.toUpperCase();
+      if (w.length <= 2) return w.toUpperCase();
+      return w.charAt(0).toUpperCase() + w.slice(1).toLowerCase();
+    })
+    .join(" ");
+}
+
+function catalogLabel(catalogUid: string, meta?: CatalogMeta | null) {
+  if (meta?.title) return String(meta.title).trim();
+  return humanizeToken(String(catalogUid || "Gelato").replace(/-/g, " "));
+}
+
+/** Prefer real Gelato display fields; never dump raw uid path strings. */
+function fieldTitle(product: any): string {
+  const candidates = [
+    product?.title,
+    product?.displayName,
+    product?.display_name,
+    product?.productName,
+    product?.product_name,
+    product?.name,
+    product?.productTitle,
+    product?.label,
+  ];
+  for (const c of candidates) {
+    const s = String(c || "").trim();
+    if (!s) continue;
+    // Reject raw uid-looking dumps / code paths
+    if (/^[a-z0-9_-]+(?:[·•|: ].*)?$/i.test(s) && (s.includes("_product_") || /_gc[a-z]_/.test(s))) continue;
+    if (s.includes(" · ") && /^(apparel|tote|mug|poster|canvas|phone)/i.test(s) && /\bgca\b|\bgsc\b|\bproduct\b/i.test(s)) continue;
+    if (s.length >= 3) return s;
+  }
+  return "";
+}
+
+function titleFromAttributes(product: any, meta?: CatalogMeta | null): string {
+  const attrs = product?.attributes;
+  if (!attrs || typeof attrs !== "object") return "";
+  const preferKeys = [
+    "GarmentStyle", "ProductType", "ProductStyle", "Style", "Type",
+    "Category", "Model", "Format", "PhoneModel", "PaperFormat",
+  ];
+  const colorKeys = ["Color", "Colour", "GarmentColor", "ProductColor"];
+  const parts: string[] = [];
+  const used = new Set<string>();
+
+  const resolve = (val: string) => {
+    const v = String(val || "").trim();
+    if (!v || v === "none" || v === "no") return "";
+    if (meta?.valueTitles?.[v]) return meta.valueTitles[v];
+    return humanizeToken(v);
+  };
+
+  for (const key of preferKeys) {
+    if (attrs[key] != null) {
+      const t = resolve(String(attrs[key]));
+      if (t && !used.has(t.toLowerCase())) {
+        parts.push(t);
+        used.add(t.toLowerCase());
+      }
+    }
+  }
+  for (const key of colorKeys) {
+    if (attrs[key] != null) {
+      const t = resolve(String(attrs[key]));
+      if (t && !used.has(t.toLowerCase())) {
+        parts.push(t);
+        used.add(t.toLowerCase());
+      }
+    }
+  }
+  // Fill from remaining meaningful attributes
+  if (parts.length < 2) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (/status|protection|coating|spot|variable|orientation|print/i.test(k)) continue;
+      const t = resolve(String(v));
+      if (t && !used.has(t.toLowerCase())) {
+        parts.push(t);
+        used.add(t.toLowerCase());
+      }
+      if (parts.length >= 3) break;
+    }
+  }
+  return parts.slice(0, 4).join(" · ");
+}
+
+/**
+ * Parse Gelato productUid into a shop-safe title.
+ * Example: apparel_product_gca_hat_gsc_beanie_gcu_baby_gqa_organic_gsi_onesize_gco_black_gpr_4-0-emb_babybugz_bz062
+ * → "Organic Baby Beanie · Black | Babybugz BZ062"
+ */
+function titleFromUid(productUid: string, catalogUid: string, meta?: CatalogMeta | null): string {
+  const uid = String(productUid || "");
+  if (!uid) return `Gelato ${catalogLabel(catalogUid, meta)}`;
+
+  const bits = uid.split("_").filter(Boolean);
+  const mapped: Record<string, string> = {};
+  const brandBits: string[] = [];
+  let i = 0;
+  // skip leading catalog/product noise
+  while (i < bits.length && (UID_NOISE.has(bits[i].toLowerCase()) || bits[i].toLowerCase() === String(catalogUid || "").toLowerCase())) {
+    i++;
+  }
+  while (i < bits.length) {
+    const tok = bits[i];
+    const low = tok.toLowerCase();
+    if (UID_ATTR_KEYS.has(low) && i + 1 < bits.length) {
+      mapped[low] = bits[i + 1];
+      i += 2;
+      continue;
+    }
+    // brand / sku tail (alphanumeric codes after known attrs)
+    if (!UID_ATTR_KEYS.has(low) && !UID_NOISE.has(low)) {
+      brandBits.push(tok);
+    }
+    i++;
+  }
+
+  const style = mapped.gsc || mapped.gca || mapped.gty || "";
+  const cut = mapped.gcu || "";
+  const quality = mapped.gqa || "";
+  const color = mapped.gco || "";
+  const size = mapped.gsi || "";
+
+  const head: string[] = [];
+  if (quality && !/^(standard|regular|default)$/i.test(quality)) head.push(humanizeToken(quality));
+  if (cut && !/^(unisex|adult|regular|standard)$/i.test(cut)) head.push(humanizeToken(cut));
+  if (style) head.push(humanizeToken(style));
+  else if (mapped.gca) head.push(humanizeToken(mapped.gca));
+
+  let title = head.join(" ").trim();
+  if (!title) {
+    // posters / mugs / cases often lack g* codes — use meaningful mid tokens
+    const mid = bits
+      .filter((b) => !UID_NOISE.has(b.toLowerCase()) && !UID_ATTR_KEYS.has(b.toLowerCase()) && !/^\d/.test(b))
+      .slice(0, 4)
+      .map(humanizeToken);
+    title = mid.join(" · ") || catalogLabel(catalogUid, meta);
+  }
+
+  const extras: string[] = [];
+  if (color) extras.push(humanizeToken(color));
+  if (size && !/^onesize$/i.test(size)) extras.push(humanizeToken(size));
+
+  // Brand: last 1–2 non-code tokens if they look like a maker name
+  const brand = brandBits
+    .filter((b) => !/^\d/.test(b) && b.length > 1)
+    .slice(-2)
+    .map(humanizeToken)
+    .join(" ");
+
+  let out = title;
+  if (extras.length) out = `${out} · ${extras.join(" · ")}`;
+  if (brand && brand.toLowerCase() !== title.toLowerCase()) out = `${out} | ${brand}`;
+
+  // Prefix catalog when title is too generic
+  const cat = catalogLabel(catalogUid, meta);
+  if (out.length < 8 && cat) out = `${cat} ${out}`.trim();
+  return out.replace(/\s+/g, " ").trim();
+}
+
+function prettyTitle(productUid: string, catalogUid: string, product: any, meta?: CatalogMeta | null) {
+  const fromField = fieldTitle(product);
+  if (fromField) return fromField;
+  const fromAttrs = titleFromAttributes(product, meta);
+  if (fromAttrs) {
+    const cat = catalogLabel(catalogUid, meta);
+    // Avoid "Apparel · Beanie" duplication if attr already names product
+    return fromAttrs.toLowerCase().includes(cat.toLowerCase()) ? fromAttrs : `${cat} ${fromAttrs}`.trim();
+  }
+  return titleFromUid(productUid, catalogUid, meta);
 }
 
 function estimateRetail(catalogUid: string) {
@@ -64,7 +298,42 @@ function estimateRetail(catalogUid: string) {
   return { cost: 9, retail: 26.9 };
 }
 
-function normalizeCatalogProduct(product: any, index: number, sector: string, catalogUid: string) {
+/** Collapse color/size variants so catalogs get product diversity, not 50 beanies. */
+function familyKey(productUid: string) {
+  return String(productUid || "")
+    .replace(/_gco_[^_]+/g, "")
+    .replace(/_gsi_[^_]+/g, "")
+    .replace(/_gpr_[^_]+/g, "")
+    .toLowerCase();
+}
+
+function haystack(product: any, catalogUid: string) {
+  const attrs = product?.attributes && typeof product.attributes === "object"
+    ? Object.values(product.attributes).join(" ")
+    : "";
+  return `${catalogUid} ${product?.productUid || product?.id || ""} ${attrs} ${product?.title || ""} ${product?.name || ""}`.toLowerCase();
+}
+
+function sectorScore(product: any, catalogUid: string, sector: string) {
+  const hints = SECTOR_HINTS[sector] || SECTOR_HINTS.beauty;
+  const text = haystack(product, catalogUid);
+  let score = 0;
+  for (const p of hints.prefer) if (text.includes(p)) score += 3;
+  for (const a of hints.avoid) if (text.includes(a)) score -= 5;
+  // Prefer products from this sector's primary catalogs
+  const preferred = SECTOR_CATALOGS[sector] || [];
+  const idx = preferred.indexOf(catalogUid);
+  if (idx >= 0) score += Math.max(0, 8 - idx);
+  return score;
+}
+
+function normalizeCatalogProduct(
+  product: any,
+  index: number,
+  sector: string,
+  catalogUid: string,
+  meta?: CatalogMeta | null,
+) {
   const uid = String(product?.productUid || product?.id || `gelato-${index}`);
   const prices = estimateRetail(catalogUid);
   const retail = money(product?.price?.basePrice ?? product?.price?.amount ?? product?.price) || prices.retail;
@@ -75,7 +344,7 @@ function normalizeCatalogProduct(product: any, index: number, sector: string, ca
     supplier: "Gelato",
     provider: "gelato",
     gelatoProductUid: uid,
-    name: prettyTitle(uid, catalogUid, product),
+    name: prettyTitle(uid, catalogUid, product, meta),
     category: String(product?.category || catalogUid || sector),
     brand: "Gelato",
     supplierPriceUsd: cost,
@@ -91,13 +360,19 @@ function normalizeEcom(product: any, index: number, sector: string) {
   const retail = money(
     product?.price?.basePrice ?? product?.price?.amount ?? product?.price ?? product?.suggestedRetailUsd ?? product?.retailPrice
   );
+  const uid = String(product?.productUid || product?.id || "");
+  const name =
+    fieldTitle(product) ||
+    titleFromAttributes(product) ||
+    (uid ? titleFromUid(uid, String(product?.category || "Gelato")) : "") ||
+    "Gelato product";
   return {
     id: String(product?.id || product?.productUid || `gelato-ecom-${index}`),
     sku: String(product?.sku || product?.productUid || product?.id || ""),
     supplier: "Gelato",
     provider: "gelato",
-    gelatoProductUid: String(product?.productUid || product?.id || ""),
-    name: String(product?.title || product?.name || "Gelato product"),
+    gelatoProductUid: uid,
+    name,
     category: String(product?.category || sector),
     brand: "Gelato",
     supplierPriceUsd: retail,
@@ -116,11 +391,40 @@ async function listCatalogUids(headers: Record<string, string>) {
   return list.map((c: any) => String(c?.catalogUid || c?.uid || c?.id || "")).filter(Boolean);
 }
 
-async function searchCatalog(headers: Record<string, string>, catalogUid: string, limit: number) {
+async function loadCatalogMeta(headers: Record<string, string>, catalogUid: string): Promise<CatalogMeta | null> {
+  try {
+    const response = await fetch(`${PRODUCT_BASE}/v3/catalogs/${encodeURIComponent(catalogUid)}`, { headers });
+    if (!response.ok) return null;
+    const result: any = await response.json().catch(() => ({}));
+    const valueTitles: Record<string, string> = {};
+    const attrs = Array.isArray(result?.productAttributes) ? result.productAttributes : [];
+    for (const attr of attrs) {
+      const values = Array.isArray(attr?.values) ? attr.values : [];
+      for (const v of values) {
+        const id = String(v?.productAttributeValueUid || "");
+        const title = String(v?.title || "").trim();
+        if (id && title) valueTitles[id] = title;
+      }
+    }
+    return {
+      title: String(result?.title || humanizeToken(catalogUid)),
+      valueTitles,
+    };
+  } catch (_) {
+    return null;
+  }
+}
+
+async function searchCatalog(
+  headers: Record<string, string>,
+  catalogUid: string,
+  limit: number,
+  offset: number,
+) {
   const response = await fetch(`${PRODUCT_BASE}/v3/catalogs/${encodeURIComponent(catalogUid)}/products:search`, {
     method: "POST",
     headers,
-    body: JSON.stringify({ offset: 0, limit }),
+    body: JSON.stringify({ offset: Math.max(0, offset), limit: Math.min(100, Math.max(1, limit)) }),
   });
   if (!response.ok) return [] as any[];
   const result: any = await response.json().catch(() => ({}));
@@ -137,7 +441,18 @@ async function loadStoreProducts(headers: Record<string, string>, storeId: strin
   if (!response.ok) return [] as any[];
   const result: any = await response.json().catch(() => ({}));
   const list = Array.isArray(result?.products) ? result.products : Array.isArray(result) ? result : [];
-  return list.map((p: any, i: number) => normalizeEcom(p, i, sector)).filter((p: any) => p.name && p.suggestedRetailUsd > 0);
+  const scored = list
+    .map((p: any, i: number) => {
+      const item = normalizeEcom(p, i, sector);
+      const score = sectorScore(p, String(p?.category || ""), sector);
+      return { item, score };
+    })
+    .filter((x: any) => x.item.name && x.item.suggestedRetailUsd > 0)
+    .sort((a: any, b: any) => b.score - a.score);
+  // If store is tiny / unfiltered, only keep positive-scoring items when we have enough
+  const positive = scored.filter((x: any) => x.score > 0).map((x: any) => x.item);
+  if (positive.length >= 8) return positive.slice(0, 50);
+  return scored.map((x: any) => x.item).slice(0, 50);
 }
 
 async function loadCatalogProducts(headers: Record<string, string>, sector: string) {
@@ -145,21 +460,60 @@ async function loadCatalogProducts(headers: Record<string, string>, sector: stri
   const preferred = SECTOR_CATALOGS[sector] || SECTOR_CATALOGS.beauty;
   const ordered = [
     ...preferred.filter((c) => !available.length || available.includes(c)),
-    ...available.filter((c) => !preferred.includes(c)),
-    ...FALLBACK_CATALOGS.filter((c) => !preferred.includes(c) && !available.includes(c)),
+    // Do NOT append every other available catalog — that collapses sector diversity.
+    ...FALLBACK_CATALOGS.filter((c) => !preferred.includes(c) && (!available.length || available.includes(c))),
   ];
   const uniqueCatalogs = [...new Set(ordered)];
-  const seen = new Set<string>();
-  const out: any[] = [];
-  for (const catalogUid of uniqueCatalogs) {
-    if (out.length >= 50) break;
-    const need = Math.min(25, 50 - out.length);
-    const products = await searchCatalog(headers, catalogUid, need + 5);
+  const baseOffset = SECTOR_OFFSET[sector] || 0;
+  const metaCache = new Map<string, CatalogMeta | null>();
+  const seenId = new Set<string>();
+  const seenFamily = new Set<string>();
+  const candidates: { item: any; score: number; catalogUid: string }[] = [];
+
+  for (let ci = 0; ci < uniqueCatalogs.length; ci++) {
+    const catalogUid = uniqueCatalogs[ci];
+    if (candidates.length >= 120) break;
+    if (!metaCache.has(catalogUid)) {
+      metaCache.set(catalogUid, await loadCatalogMeta(headers, catalogUid));
+    }
+    const meta = metaCache.get(catalogUid) || null;
+    // Primary catalogs get larger pulls; later ones fill gaps
+    const pull = ci < 2 ? 40 : ci < 4 ? 25 : 15;
+    const offset = baseOffset + ci * 12;
+    const products = await searchCatalog(headers, catalogUid, pull, offset);
     for (const product of products) {
-      const item = normalizeCatalogProduct(product, out.length, sector, catalogUid);
-      if (!item.id || seen.has(item.id)) continue;
-      seen.add(item.id);
-      out.push(item);
+      const uid = String(product?.productUid || product?.id || "");
+      if (!uid || seenId.has(uid)) continue;
+      const fam = familyKey(uid);
+      // One representative per product family (color/size variants collapsed)
+      if (seenFamily.has(fam)) continue;
+      seenId.add(uid);
+      seenFamily.add(fam);
+      const item = normalizeCatalogProduct(product, candidates.length, sector, catalogUid, meta);
+      const score = sectorScore(product, catalogUid, sector);
+      candidates.push({ item, score, catalogUid });
+    }
+  }
+
+  // Rank by sector fit, then take top 50 with family diversity enforced again
+  candidates.sort((a, b) => b.score - a.score || a.item.name.localeCompare(b.item.name));
+  const out: any[] = [];
+  const outFamilies = new Set<string>();
+  for (const c of candidates) {
+    const fam = familyKey(c.item.id);
+    if (outFamilies.has(fam)) continue;
+    // Soft reject strongly negative scores unless we are short
+    if (c.score < -2 && out.length >= 20) continue;
+    outFamilies.add(fam);
+    out.push(c.item);
+    if (out.length >= 50) break;
+  }
+
+  // Backfill if sector filters were too aggressive
+  if (out.length < 40) {
+    for (const c of candidates) {
+      if (out.some((p) => p.id === c.item.id)) continue;
+      out.push(c.item);
       if (out.length >= 50) break;
     }
   }
