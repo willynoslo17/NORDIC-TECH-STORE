@@ -1,8 +1,10 @@
 import cjCatalog from "../../catalog/selected-products.json";
 import printifyCatalog from "../../catalog/printify-products.json";
+import gelatoCatalog from "../../catalog/gelato-products.json";
+import printfulCatalog from "../../catalog/printful-products.json";
 
 type Env = { STRIPE_SECRET_KEY?: string };
-type CartItem = { id: string | number; quantity: number; sku?: string; provider?: string; name?: string };
+type CartItem = { id: string | number; quantity: number; sku?: string; provider?: string; name?: string; usd?: number };
 type CheckoutPayload = {
   market: "NO" | "EU" | "PE";
   items: CartItem[];
@@ -64,9 +66,35 @@ const products = new Map<string, ProductEntry>();
   if (entry.sku) products.set(entry.sku, entry);
 });
 
+(gelatoCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
+  const entry = toEntry({ ...product, provider: "gelato", supplier: "Gelato" });
+  products.set(String(30001 + index), entry);
+  if (product.id != null) products.set(String(product.id), entry);
+  if (entry.sku) products.set(entry.sku, entry);
+});
+
+(printfulCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
+  const entry = toEntry({ ...product, provider: "printful", supplier: "Printful" });
+  products.set(String(40001 + index), entry);
+  if (product.id != null) products.set(String(product.id), entry);
+  if (entry.sku) products.set(entry.sku, entry);
+});
+
 function resolveProduct(item: CartItem): ProductEntry | undefined {
-  return products.get(String(item.id))
+  const mapped = products.get(String(item.id))
     || (item.sku ? products.get(String(item.sku)) : undefined);
+  if (mapped) return mapped;
+  const usd = Number(item.usd || 0);
+  const provider = normalizeProvider(item.provider);
+  if (usd > 0 && item.name && ["cj", "printify", "gelato", "printful"].includes(provider)) {
+    return {
+      name: String(item.name).slice(0, 200),
+      sku: String(item.sku || "").slice(0, 100),
+      usd,
+      provider,
+    };
+  }
+  return undefined;
 }
 
 function json(error: string, status: number) {

@@ -174,7 +174,7 @@
       if (!form.reportValidity()) return;
       const items = Object.entries(cartObject()).map(([id, quantity]) => {
         const item = productById(id) || {};
-        return { id, sku: item.sku || "", name: item.name || "Product", quantity, provider: item.provider || "" };
+        return { id, sku: item.sku || "", name: item.name || item.n || "Product", quantity, provider: item.provider || "", usd: Number(item.base || item.p || 0) };
       });
       if (!items.length) return;
       const id = "NORD-" + Date.now().toString(36).toUpperCase();

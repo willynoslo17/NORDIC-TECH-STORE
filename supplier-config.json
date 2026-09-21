@@ -17,8 +17,20 @@
   "printify": {
     "enabled": true,
     "shopId": "28847802",
-    "catalogMode": "local-selected-merge",
+    "catalogMode": "live-with-local-fallback",
     "catalogFile": "catalog/printify-products.json",
-    "note": "Placeholders until PRINTIFY_API_TOKEN + catalog export from shop 28847802 replace them."
+    "note": "Live Printify API via PRINTIFY_API_TOKEN; local JSON is empty fallback only."
+  },
+  "gelato": {
+    "enabled": true,
+    "catalogMode": "live-with-local-fallback",
+    "catalogFile": "catalog/gelato-products.json",
+    "note": "Live Gelato API via GELATO_API_KEY; local JSON is empty fallback only."
+  },
+  "printful": {
+    "enabled": true,
+    "catalogMode": "live-with-local-fallback",
+    "catalogFile": "catalog/printful-products.json",
+    "note": "Live Printful API via PRINTFUL_API_TOKEN; local JSON is empty fallback only."
   }
 }

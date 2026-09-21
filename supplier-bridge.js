@@ -1,8 +1,24 @@
-/* Nordic supplier bridge: CJ selected catalog + Printify selected catalog (merge). */
+/* Nordic supplier bridge: separate CJ / Printify / Gelato / Printful catalogs (no blend). */
 (function () {
   "use strict";
 
-  const CJ_ENDPOINT = "/api/cj-products";
+  const ENDPOINTS = {
+    cj: "/api/cj-products",
+    printify: "/api/printify-products",
+    gelato: "/api/gelato-products",
+    printful: "/api/printful-products"
+  };
+  const LOCAL_FILES = {
+    cj: "catalog/selected-products.json",
+    printify: "catalog/printify-products.json",
+    gelato: "catalog/gelato-products.json",
+    printful: "catalog/printful-products.json"
+  };
+  const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
+  const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
+
+  window.nordicCatalogs = { cj: [], printify: [], gelato: [], printful: [] };
+  window.nordicActiveSupplier = "cj";
 
   function rows(payload) {
     const content = payload && payload.data && payload.data.content;
@@ -27,38 +43,24 @@
     badge.style.color = online ? "#047857" : "#64748b";
   }
 
-  function curatedCj(item, index, category) {
-    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || 0);
-    return {
-      id: 10001 + index,
-      name: item.name || "Selected product",
-      cat: item.category || category,
-      base: amount > 0 ? amount : 1,
+  function curated(item, index, category, provider) {
+    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || item.base || 0);
+    const baseId = ID_BASE[provider] || 90001;
+    const out = {
+      id: item.id != null && Number.isFinite(Number(item.id)) ? Number(item.id) : baseId + index,
+      name: item.name || (LABELS[provider] || "Supplier") + " product",
+      cat: item.category || item.cat || category,
+      base: amount > 0 ? amount : 0,
       v: "v" + ((index % 4) + 1),
-      tag: "CJ Selected",
+      tag: LABELS[provider] || provider,
       image: item.image || "",
       sku: item.sku || "",
-      supplier: item.supplier || "CJ Dropshipping",
-      provider: "cj"
+      supplier: item.supplier || LABELS[provider] || provider,
+      provider: provider
     };
-  }
-
-  function curatedPrintify(item, index, category) {
-    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || 0);
-    return {
-      id: 20001 + index,
-      name: item.name || "Printify product",
-      cat: item.category || category,
-      base: amount > 0 ? amount : 1,
-      v: "v" + ((index % 4) + 1),
-      tag: "Printify",
-      image: item.image || "",
-      sku: item.sku || String(item.printifyVariantId || ""),
-      supplier: "Printify",
-      provider: "printify",
-      printifyProductId: item.printifyProductId || "",
-      printifyVariantId: item.printifyVariantId || ""
-    };
+    if (item.printifyProductId) out.printifyProductId = item.printifyProductId;
+    if (item.printifyVariantId) out.printifyVariantId = item.printifyVariantId;
+    return out;
   }
 
   async function loadJson(url) {
@@ -66,26 +68,40 @@
       const response = await fetch(url, { cache: "no-store" });
       if (!response.ok) return [];
       const data = await response.json();
-      return Array.isArray(data) ? data : [];
+      if (Array.isArray(data)) return data;
+      if (Array.isArray(data.products)) return data.products;
+      return [];
     } catch (_) {
       return [];
     }
   }
 
-  async function loadPrintifySelected(category) {
-    const items = await loadJson("catalog/printify-products.json");
-    return items.map((item, index) => curatedPrintify(item, index, category)).filter(item => item.base > 0);
+  async function loadApiProducts(endpoint) {
+    const timeout = new AbortController();
+    const timer = setTimeout(() => timeout.abort(), 8000);
+    try {
+      const response = await fetch(endpoint, { signal: timeout.signal, cache: "no-store" });
+      if (!response.ok) return [];
+      const payload = await response.json();
+      if (Array.isArray(payload.products)) return payload.products;
+      if (Array.isArray(payload)) return payload;
+      return [];
+    } catch (_) {
+      return [];
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   async function loadCjSelected(config) {
-    const localItems = await loadJson("catalog/selected-products.json");
+    const localItems = await loadJson(LOCAL_FILES.cj);
     if (localItems.length) {
-      return localItems.map((item, index) => curatedCj(item, index, config.category)).slice(0, 30);
+      return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 30);
     }
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 7000);
     try {
-      const url = CJ_ENDPOINT + "?q=" + encodeURIComponent(config.query);
+      const url = ENDPOINTS.cj + "?q=" + encodeURIComponent(config.query || "");
       const response = await fetch(url, { signal: timeout.signal });
       if (!response.ok) throw new Error("CJ unavailable");
       const payload = await response.json();
@@ -98,7 +114,7 @@
           cat: config.category,
           base: price(item.sellPrice || item.nowPrice),
           v: "v" + ((index % 4) + 1),
-          tag: "CJ Selected",
+          tag: "CJ",
           image: item.bigImage || item.image || "",
           sku: item.sku || "",
           supplier: "CJ Dropshipping",
@@ -111,21 +127,88 @@
     }
   }
 
+  async function loadPodCatalog(provider, category) {
+    const apiItems = await loadApiProducts(ENDPOINTS[provider]);
+    if (apiItems.length) {
+      return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+    }
+    const localItems = await loadJson(LOCAL_FILES[provider]);
+    return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+  }
+
+  function applyActiveCatalog(supplier) {
+    const key = LABELS[supplier] ? supplier : "cj";
+    window.nordicActiveSupplier = key;
+    const list = (window.nordicCatalogs[key] || []).slice();
+    if (typeof products !== "undefined") {
+      try { products = list; } catch (_) { window.products = list; }
+    } else {
+      window.products = list;
+    }
+    if (typeof data !== "undefined") {
+      try {
+        data = list.map(x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key }));
+      } catch (_) {}
+    }
+    if (typeof filter !== "undefined") { try { filter = "All"; } catch (_) {} }
+    if (typeof f !== "undefined") { try { f = "All"; } catch (_) {} }
+    if (typeof renderFilters === "function") renderFilters();
+    else if (typeof rf === "function") rf();
+    if (typeof renderProducts === "function") renderProducts();
+    else if (typeof rp === "function") rp();
+    if (typeof renderCart === "function") renderCart();
+    else if (typeof rc === "function") rc();
+    document.querySelectorAll("[data-supplier-switch]").forEach(btn => {
+      const active = btn.getAttribute("data-supplier-switch") === key;
+      btn.classList.toggle("active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+    });
+    const count = list.length;
+    setStatus(LABELS[key] + " · " + count + " productos", count > 0);
+    return list;
+  }
+
+  function mountSwitcher() {
+    if (document.querySelector("[data-supplier-switcher]")) return;
+    const bar = document.createElement("div");
+    bar.dataset.supplierSwitcher = "";
+    bar.setAttribute("role", "tablist");
+    bar.setAttribute("aria-label", "Supplier catalog");
+    bar.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;padding:10px 5%;position:sticky;top:64px;z-index:20;background:rgba(7,9,13,.92);backdrop-filter:blur(10px);border-bottom:1px solid #1c2633";
+    Object.keys(LABELS).forEach(key => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "chip" + (key === "cj" ? " active" : "");
+      btn.dataset.supplierSwitch = key;
+      btn.textContent = LABELS[key];
+      btn.setAttribute("aria-pressed", key === "cj" ? "true" : "false");
+      btn.onclick = () => applyActiveCatalog(key);
+      bar.appendChild(btn);
+    });
+    const shop = document.getElementById("shop") || document.getElementById("products");
+    if (shop && shop.parentNode) shop.parentNode.insertBefore(bar, shop);
+    else document.body.insertBefore(bar, document.body.firstChild);
+  }
+
+  window.setNordicSupplier = applyActiveCatalog;
+
   window.loadNordicCatalog = async function (config) {
-    const [cj, printify] = await Promise.all([
-      loadCjSelected(config || {}),
-      loadPrintifySelected((config && config.category) || "General")
+    const cfg = config || {};
+    const category = cfg.category || "General";
+    const [cj, printify, gelato, printful] = await Promise.all([
+      loadCjSelected(cfg),
+      loadPodCatalog("printify", category),
+      loadPodCatalog("gelato", category),
+      loadPodCatalog("printful", category)
     ]);
-    const merged = [...cj, ...printify];
-    if (!merged.length) {
+    window.nordicCatalogs = { cj, printify, gelato, printful };
+    mountSwitcher();
+    const active = applyActiveCatalog("cj");
+    if (!cj.length && !printify.length && !gelato.length && !printful.length) {
       setStatus("Catálogo local · proveedores en espera", false);
       return [];
     }
-    const parts = [];
-    if (cj.length) parts.push("CJ " + cj.length);
-    if (printify.length) parts.push("Printify " + printify.length);
-    setStatus(parts.join(" + ") + " · " + merged.length + " productos", true);
-    return merged;
+    return active;
   };
 
   window.showGermanDropStatus = function (enabled) {
