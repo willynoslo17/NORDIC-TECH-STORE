@@ -8,6 +8,28 @@
     gelato: "/api/gelato-products",
     printful: "/api/printful-products"
   };
+  /** CJ search keywords → Printify/Gelato/Printful sector keys */
+  const POD_QUERY_ALIAS = {
+    "phone accessories": "electronics",
+    "mobile accessories": "electronics",
+    "computer accessories": "electronics",
+    "smart home": "electronics",
+    "wearable technology": "electronics",
+    "wearables": "electronics",
+    "educational toys": "toys",
+    "montessori toys": "toys",
+    "stem toys": "toys",
+    "baby toys": "toys",
+    "hair care": "beauty",
+    "skincare": "beauty",
+    "perfume": "beauty",
+    "facial": "beauty",
+    "cosmetic": "beauty"
+  };
+  function podQuery(q) {
+    const key = String(q || "").toLowerCase();
+    return POD_QUERY_ALIAS[key] || key;
+  }
   const LOCAL_FILES = {
     cj: "catalog/selected-products.json",
     printify: "catalog/printify-selected.json",
@@ -149,7 +171,7 @@
   }
 
   async function loadPodCatalog(provider, category, query) {
-    const q = encodeURIComponent(query || "");
+    const q = encodeURIComponent(podQuery(query || ""));
     const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q);
     if (apiItems.length) {
       return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
