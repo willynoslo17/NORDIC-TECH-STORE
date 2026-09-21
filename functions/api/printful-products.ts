@@ -1,5 +1,96 @@
 const BASE = "https://api.printful.com";
 
+const SECTOR_KEYWORDS: Record<string, string[]> = {
+  "beauty": [
+    "beauty",
+    "perfume",
+    "skincare",
+    "cosmetic",
+    "glow",
+    "tote",
+    "t-shirt",
+    "tee",
+    "mug",
+    "crewneck"
+  ],
+  "toys": [
+    "toy",
+    "kid",
+    "kids",
+    "child",
+    "poster",
+    "t-shirt",
+    "tee",
+    "educational",
+    "abc"
+  ],
+  "electronics": [
+    "tech",
+    "electronic",
+    "phone",
+    "case",
+    "tough",
+    "gadget",
+    "circuit",
+    "debug"
+  ],
+  "pet supplies": [
+    "pet",
+    "dog",
+    "cat",
+    "paw",
+    "tote",
+    "t-shirt",
+    "tee",
+    "animal"
+  ],
+  "home living": [
+    "home",
+    "living",
+    "decor",
+    "hygge",
+    "tote",
+    "poster",
+    "mug",
+    "kitchen",
+    "pillow"
+  ],
+  "fitness": [
+    "fitness",
+    "outdoor",
+    "trail",
+    "sport",
+    "hoodie",
+    "zip",
+    "t-shirt",
+    "tee",
+    "crewneck",
+    "gym"
+  ],
+  "solar energy": [
+    "solar",
+    "energy",
+    "watt",
+    "green",
+    "tote",
+    "poster",
+    "clean",
+    "eco"
+  ],
+  "car accessories": [
+    "car",
+    "auto",
+    "driver",
+    "garage",
+    "cap",
+    "hat",
+    "hoodie",
+    "zip",
+    "mobility",
+    "route"
+  ]
+};
+
 function money(value: unknown) {
   const amount = Number(value);
   return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 100) / 100 : 0;
@@ -21,9 +112,19 @@ function normalize(row: any, index: number) {
   };
 }
 
+function matchesSector(p: any, sector: string) {
+  const keys = SECTOR_KEYWORDS[sector] || SECTOR_KEYWORDS.beauty;
+  const text = [p.name, p.category, p.sku].join(" ").toLowerCase();
+  return keys.some((k) => text.includes(k));
+}
+
 export async function onRequestGet(context: any) {
   const token = context.env.PRINTFUL_API_TOKEN;
-  if (!token) return Response.json({ error: "Printful is not configured", products: [] }, { status: 503 });
+  const reqUrl = new URL(context.request.url);
+  const wanted = (reqUrl.searchParams.get("q") || reqUrl.searchParams.get("sector") || "beauty").toLowerCase().trim();
+  const sector = SECTOR_KEYWORDS[wanted] ? wanted : "beauty";
+  const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
+  if (!token) return Response.json({ error: "Printful is not configured", products: [], sector, query: sector }, { status: 503, headers: headersOut });
   try {
     const headers: Record<string, string> = { Authorization: `Bearer ${token}` };
     if (context.env.PRINTFUL_STORE_ID) headers["X-PF-Store-Id"] = String(context.env.PRINTFUL_STORE_ID);
@@ -33,11 +134,10 @@ export async function onRequestGet(context: any) {
     const response = await fetch(url, { headers });
     const result: any = await response.json();
     if (!response.ok) {
-      return Response.json({ error: result?.error?.message || result?.result || "Printful product request failed", products: [] }, { status: 502 });
+      return Response.json({ error: result?.error?.message || result?.result || "Printful product request failed", products: [] }, { status: 502, headers: headersOut });
     }
     const list = Array.isArray(result?.result) ? result.result : [];
-    const products = list.map(normalize).filter((p: any) => p.name).slice(0, 30);
-    // Fetch detail for retail price when list lacks it
+    let products = list.map(normalize).filter((p: any) => p.name);
     const detailed = [];
     for (const product of products.slice(0, 20)) {
       try {
@@ -58,13 +158,18 @@ export async function onRequestGet(context: any) {
         detailed.push(product);
       }
     }
+    let out = detailed.filter((p: any) => p.suggestedRetailUsd > 0);
+    const filtered = out.filter((p) => matchesSector(p, sector));
+    if (filtered.length >= 1) out = filtered;
     return Response.json({
       ok: true,
       supplier: "printful",
-      products: detailed.filter((p: any) => p.suggestedRetailUsd > 0).slice(0, 30),
+      sector,
+      query: sector,
+      products: out.slice(0, 30),
       markets: ["NO", "EU", "PE"],
-    });
+    }, { headers: headersOut });
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Printful request failed", products: [] }, { status: 502 });
+    return Response.json({ error: error instanceof Error ? error.message : "Printful request failed", products: [] }, { status: 502, headers: headersOut });
   }
 }

@@ -1,4 +1,4 @@
-/* Nordic supplier bridge: separate CJ / Printify / Gelato / Printful catalogs (no blend). */
+/* Nordic supplier bridge: separate CJ / Printify / Gelato / Printful catalogs (no blend). Sector query mirrors CJ. */
 (function () {
   "use strict";
 
@@ -10,7 +10,8 @@
   };
   const LOCAL_FILES = {
     cj: "catalog/selected-products.json",
-    printify: "catalog/printify-products.json",
+    printify: "catalog/printify-selected.json",
+    printifyFallback: "catalog/printify-products.json",
     gelato: "catalog/gelato-products.json",
     printful: "catalog/printful-products.json"
   };
@@ -127,10 +128,19 @@
     }
   }
 
-  async function loadPodCatalog(provider, category) {
-    const apiItems = await loadApiProducts(ENDPOINTS[provider]);
+  async function loadPodCatalog(provider, category, query) {
+    const q = encodeURIComponent(query || "");
+    const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q);
     if (apiItems.length) {
       return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+    }
+    if (provider === "printify") {
+      const selected = await loadJson(LOCAL_FILES.printify);
+      if (selected.length) {
+        return selected.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
+      }
+      const fallback = await loadJson(LOCAL_FILES.printifyFallback);
+      return fallback.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
     }
     const localItems = await loadJson(LOCAL_FILES[provider]);
     return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 30);
@@ -195,11 +205,12 @@
   window.loadNordicCatalog = async function (config) {
     const cfg = config || {};
     const category = cfg.category || "General";
+    const query = cfg.query || "";
     const [cj, printify, gelato, printful] = await Promise.all([
       loadCjSelected(cfg),
-      loadPodCatalog("printify", category),
-      loadPodCatalog("gelato", category),
-      loadPodCatalog("printful", category)
+      loadPodCatalog("printify", category, query),
+      loadPodCatalog("gelato", category, query),
+      loadPodCatalog("printful", category, query)
     ]);
     window.nordicCatalogs = { cj, printify, gelato, printful };
     mountSwitcher();
