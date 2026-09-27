@@ -85,6 +85,16 @@ indexRows("printify", printifyCatalog);
 indexRows("gelato", gelatoCatalog);
 indexRows("printful", printfulCatalog);
 
+/** Real Printify shop products (product_id|variant_id) the store sells; anything else is not sold via Printify. */
+const linkedPrintify = new Set<string>(
+  (Array.isArray(printifySelected) ? (printifySelected as StaticRow[]) : [])
+    .filter((row) => /^[0-9a-f]{24}$/.test(String(row?.printifyProductId || "")) && /^\d+$/.test(String(row?.printifyVariantId || "")))
+    .map((row) => `${row.printifyProductId}|${row.printifyVariantId}`),
+);
+function printifyLinked(ids: SupplierIds | undefined) {
+  return linkedPrintify.has(`${ids?.printify_product_id || ""}|${ids?.printify_variant_id || ""}`);
+}
+
 function staticLookup(item: CartItem): ResolvedLine | null {
   const claimed = normalizeProvider(item.provider);
   const providers = claimed ? [claimed] : PROVIDERS;
@@ -111,7 +121,9 @@ async function resolveLine(item: CartItem, env: Env): Promise<ResolvedLine | nul
   if (item && typeof item.quote === "string" && item.quote) {
     const quote = await verifyQuote(env, item.quote);
     const provider = quote ? normalizeProvider(quote.p) : "";
-    if (quote && provider) {
+    // Printify: only quotes for rows linked to a real product/variant in shop 28847802 are honoured
+    // (older quotes carrying type-matched ids fall through to the bundled catalog and are rejected there).
+    if (quote && provider && (provider !== "printify" || printifyLinked(quote.x))) {
       return {
         provider,
         ref: quote.r,
