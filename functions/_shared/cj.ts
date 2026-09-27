@@ -4,9 +4,14 @@
  * ask the shared CJ store's /api/cj-variant (same host the catalog fallback already uses).
  * Results are cached in isolate memory and, best effort, in the Cloudflare Cache API.
  * The access token is only kept in isolate memory. It is never persisted or returned.
+ *
+ * Also: CJ freightCalculate (shipping method for createOrderV2), same token flow and the same
+ * nordic-beauty-perfumes fallback (/api/cj-freight) for stores without CJ_API_KEY.
  */
+import { cheapestLogistic, CJ_DEFAULT_LOGISTIC, type CjLogistic } from "./provider-orders";
 const CJ_BASE = "https://developers.cjdropshipping.com/api2.0/v1";
 const CJ_VARIANT_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-variant";
+const CJ_FREIGHT_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-freight";
 const CJ_GAP_MS = 1100;
 const VARIANT_TTL_SECONDS = 7 * 24 * 3600;
 
@@ -144,4 +149,82 @@ export async function resolveCjVariant(
   }
   if (value) memory.set(pid, { value, until: Date.now() + VARIANT_TTL_SECONDS * 1000 });
   return value;
+}
+
+// ---------------------------------------------------------------- freight (shipping method)
+
+export type FreightRequest = { endCountryCode: string; zip: string; products: Array<{ vid: string; quantity: number }> };
+
+/** Validates/normalises a freight request (also used by the public /api/cj-freight endpoint). */
+export function validFreightRequest(body: any): FreightRequest | null {
+  const endCountryCode = String(body?.endCountryCode || "").toUpperCase();
+  if (!/^[A-Z]{2}$/.test(endCountryCode)) return null;
+  const zip = String(body?.zip || "").trim();
+  if (zip && !/^[A-Za-z0-9 -]{1,20}$/.test(zip)) return null;
+  const list = Array.isArray(body?.products) ? body.products : [];
+  if (!list.length || list.length > 20) return null;
+  const products: FreightRequest["products"] = [];
+  for (const p of list) {
+    const vid = String(p?.vid || "");
+    const quantity = Number(p?.quantity);
+    if (!validPid(vid) || !Number.isInteger(quantity) || quantity < 1 || quantity > 100) return null;
+    products.push({ vid, quantity });
+  }
+  return { endCountryCode, zip, products };
+}
+
+/** Raw CJ freightCalculate options (logisticName, logisticPrice USD, logisticAging, ...). Throws on CJ errors. */
+export async function cjFreightOptions(apiKey: string, request: FreightRequest): Promise<any[]> {
+  const token = await cjToken(apiKey);
+  const body = await cjJson(`${CJ_BASE}/logistic/freightCalculate`, {
+    method: "POST",
+    headers: { "content-type": "application/json", "CJ-Access-Token": token },
+    body: JSON.stringify({ startCountryCode: "CN", endCountryCode: request.endCountryCode, ...(request.zip ? { zip: request.zip } : {}), products: request.products }),
+  });
+  return Array.isArray(body?.data) ? body.data : [];
+}
+
+async function freightFromFallback(request: FreightRequest, timeoutMs: number): Promise<{ name: string; price: number } | null> {
+  const response = await fetch(CJ_FREIGHT_FALLBACK, {
+    method: "POST",
+    headers: { "content-type": "application/json", "user-agent": "nordic-cj-freight-fallback" },
+    body: JSON.stringify(request),
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+  const body: any = await response.json().catch(() => null);
+  if (!response.ok || !body?.ok || !body?.logisticName) return null;
+  const price = Number(body.logisticPrice);
+  return { name: String(body.logisticName), price: Number.isFinite(price) ? price : 0 };
+}
+
+/**
+ * Cheapest CJ shipping method for the order, or CJ_DEFAULT_LOGISTIC with a warning.
+ * Never throws and never takes longer than timeoutMs (the Stripe webhook must stay fast).
+ */
+export async function chooseCjLogistic(env: any, request: FreightRequest, timeoutMs = 6000): Promise<CjLogistic> {
+  const fallback: CjLogistic = { name: CJ_DEFAULT_LOGISTIC, source: "default", warning: "order:cj:logistic_default_cjpacket_ordinary" };
+  const valid = validFreightRequest(request);
+  if (!valid) return fallback;
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); });
+  const lookup = (async (): Promise<CjLogistic | null> => {
+    try {
+      const apiKey = env && env.CJ_API_KEY ? String(env.CJ_API_KEY) : "";
+      if (apiKey) {
+        const best = cheapestLogistic(await cjFreightOptions(apiKey, valid));
+        return best ? { name: best.name, price: best.price, source: "cj-freightCalculate" } : null;
+      }
+      const best = await freightFromFallback(valid, timeoutMs);
+      return best ? { name: best.name, price: best.price, source: "fallback:cj-freightCalculate" } : null;
+    } catch {
+      return null;
+    }
+  })();
+  try {
+    return (await Promise.race([lookup, timeout])) || fallback;
+  } catch {
+    return fallback;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }

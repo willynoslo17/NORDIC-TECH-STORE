@@ -88,6 +88,16 @@ function isShippingLine(item: Rec, meta: Rec) {
   return !str(meta.kind) && str(item.description) === "Standard shipping";
 }
 
+/** Product metadata of the non-shipping lines, in the same order (line_index) as the payload's line_items. */
+export function productLineMetadata(lineItems: Rec[]): Rec[] {
+  const out: Rec[] = [];
+  for (const item of lineItems) {
+    const pmeta = rec(rec(rec(item.price).product).metadata);
+    if (!isShippingLine(item, pmeta)) out.push(pmeta);
+  }
+  return out;
+}
+
 export function buildOrderPayload(event: Rec, session: Rec, lineItems: Rec[], receivedAt = new Date()) {
   const meta = rec(session.metadata);
   const customer = rec(session.customer_details);

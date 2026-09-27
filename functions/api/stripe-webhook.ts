@@ -1,10 +1,13 @@
 import { STORE } from "../_shared/store";
-import { buildOrderPayload } from "../_shared/order-payload";
+import { buildOrderPayload, productLineMetadata } from "../_shared/order-payload";
+import { addressComplete, buildProviderFields, cjProducts, fallbackProviderFields, type CjLogistic } from "../_shared/provider-orders";
+import { chooseCjLogistic } from "../_shared/cj";
 
 type Env = {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   MAKE_ORDERS_WEBHOOK?: string;
+  CJ_API_KEY?: string;
 };
 
 type StripeEvent = {
@@ -71,6 +74,35 @@ async function fetchLineItems(sessionId: string, secretKey: string): Promise<Arr
   return items;
 }
 
+/**
+ * Adds the provider-ready fields (printify_line_items, printify_order_json, gelato_order_json, cj_order_json,
+ * printful_order_json, needs_review, review_reason, review_summary). Never throws: on any error the order is
+ * still forwarded, with empty provider bodies and needs_review = true.
+ */
+async function withProviderOrders(order: ReturnType<typeof buildOrderPayload>, lineItems: Array<Record<string, unknown>>, env: Env) {
+  try {
+    const gelatoFiles: Record<number, string> = {};
+    productLineMetadata(lineItems).forEach((meta, index) => {
+      const url = String(meta.gelato_file_url || "");
+      if (url) gelatoFiles[index] = url;
+    });
+    let cjLogistic: CjLogistic | null = null;
+    let base = order;
+    const cj = cjProducts(order);
+    if (cj.length && addressComplete(order)) {
+      cjLogistic = await chooseCjLogistic(env, {
+        endCountryCode: order.shipping.country,
+        zip: order.shipping.postal_code,
+        products: cj.map(({ vid, quantity }) => ({ vid, quantity })),
+      });
+      if (cjLogistic.warning) base = { ...order, warnings: [...order.warnings, cjLogistic.warning] };
+    }
+    return { ...base, ...buildProviderFields(base, { gelatoFiles, cjLogistic }) };
+  } catch (error) {
+    return { ...order, ...fallbackProviderFields(order, error) };
+  }
+}
+
 export async function onRequestPost(context: { request: Request; env: Env }) {
   const secret = context.env.STRIPE_WEBHOOK_SECRET;
   const makeHook = context.env.MAKE_ORDERS_WEBHOOK;
@@ -103,7 +135,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   // Don't forward an order without its lines. A non-2xx makes Stripe retry later.
   if (!lineItems) return Response.json({ error: "Could not load line items" }, { status: 502 });
 
-  const order = buildOrderPayload(event as Record<string, unknown>, session, lineItems);
+  const order = await withProviderOrders(buildOrderPayload(event as Record<string, unknown>, session, lineItems), lineItems, context.env);
   const response = await fetch(makeHook, {
     method: "POST",
     headers: { "content-type": "application/json" },
