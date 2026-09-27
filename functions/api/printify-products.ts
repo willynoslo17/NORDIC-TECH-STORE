@@ -1,3 +1,4 @@
+import { withQuotes } from "../_shared/quote";
 const BASE = "https://api.printify.com/v1";
 const SELECTED: any[] = [
   {
@@ -895,8 +896,10 @@ async function enrichFromLive(token: string, shopId: string, curatedProducts: an
       const enabled = variants.find((v: any) => v?.is_enabled !== false) || variants[0] || {};
       const images = Array.isArray(match.images) ? match.images : [];
       const image = images.find((img: any) => img?.is_default)?.src || images[0]?.src || item.image;
-      const cost = money(enabled.cost);
-      const retail = money(enabled.price) || (cost > 0 ? Math.round(cost * 2.2 * 100) / 100 : 0);
+      // Printify API amounts are integer cents (e.g. 3099 = $30.99).
+      const cost = money(Number(enabled.cost) / 100);
+      const retail = money(Number(enabled.price) / 100) || (cost > 0 ? Math.round(cost * 2.2 * 100) / 100 : 0);
+      const exact = Boolean(item.printifyProductId) && String(match.id || "") === String(item.printifyProductId);
       return {
         ...item,
         printifyProductId: String(match.id || item.printifyProductId || ""),
@@ -906,6 +909,8 @@ async function enrichFromLive(token: string, shopId: string, curatedProducts: an
         suggestedRetailUsd: retail || item.suggestedRetailUsd,
         image: image || item.image,
         enriched: true,
+        // "type" = matched by product type word only; the live product may carry a different design than the title.
+        printifyMatch: exact ? "id" : "type",
       };
     });
   } catch (_) { return curatedProducts; }
@@ -920,6 +925,13 @@ export async function onRequestGet(context: any) {
   const token = context.env.PRINTIFY_API_TOKEN;
   const shopId = context.env.PRINTIFY_SHOP_ID || "28847802";
   if (token && products.length) products = await enrichFromLive(String(token), String(shopId), products);
+  products = await withQuotes(
+    context.env,
+    "printify",
+    products,
+    (p: any) => ({ printify_product_id: p.printifyProductId, printify_variant_id: p.printifyVariantId }),
+    (p: any) => p.printifyMatch,
+  );
   return Response.json(
     { ok: true, supplier: "printify", sector, query: sector, products, count: products.length, source: "printify-selected-primary", compliance: "EU/Nordic POD merch", markets: ["NO", "EU", "PE"] },
     { status: products.length ? 200 : 503, headers }

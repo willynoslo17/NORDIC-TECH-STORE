@@ -1,3 +1,5 @@
+import { withQuotes } from "../_shared/quote";
+
 const BASE = "https://api.printful.com";
 
 const SECTOR_ALIASES: Record<string, string> = {
@@ -42,6 +44,15 @@ function resolveSector(raw: string) {
   return SECTOR_ALIASES[key] ? SECTOR_ALIASES[key] : (SECTOR_CATEGORIES[key] ? key : "beauty");
 }
 
+function printfulIds(product: any) {
+  return {
+    printful_product_id: product?.printfulProductId,
+    printful_sync_variant_id: product?.printfulSyncVariantId,
+    printful_variant_id: product?.printfulVariantId,
+    printful_external_variant_id: product?.printfulExternalVariantId,
+  };
+}
+
 function authHeaders(token?: string, storeId?: string) {
   const headers: Record<string, string> = { "User-Agent": "NordicStore/1.0" };
   if (token) headers.Authorization = `Bearer ${token}`;
@@ -49,7 +60,7 @@ function authHeaders(token?: string, storeId?: string) {
   return headers;
 }
 
-function normalizeCatalog(row: any, index: number, sector: string, costHint = 0) {
+function normalizeCatalog(row: any, index: number, sector: string, costHint = 0, variantId = "") {
   const cost = money(costHint);
   const retail = cost > 0 ? money(cost * (TYPE_MARKUP.default || 2.35)) : 0;
   return {
@@ -58,6 +69,10 @@ function normalizeCatalog(row: any, index: number, sector: string, costHint = 0)
     supplier: "Printful",
     provider: "printful",
     printfulProductId: String(row?.id || ""),
+    // Catalog (blank) variant. No design files are attached, so orders need manual artwork.
+    printfulVariantId: String(variantId || ""),
+    printfulSyncVariantId: "",
+    printfulSource: "catalog",
     name: String(row?.title || row?.name || "Printful product"),
     category: String(row?.type_name || row?.type || sector),
     brand: String(row?.brand || "Printful"),
@@ -78,6 +93,10 @@ function normalizeStore(row: any, index: number, sector: string) {
     supplier: "Printful",
     provider: "printful",
     printfulProductId: String(sync?.id || ""),
+    printfulSyncVariantId: "",
+    printfulVariantId: "",
+    printfulExternalVariantId: "",
+    printfulSource: "store",
     name: String(sync?.name || "Printful product"),
     category: "Printful",
     brand: "Printful",
@@ -112,6 +131,10 @@ async function loadStoreProducts(headers: Record<string, string>, sector: string
           base.suggestedRetailUsd = retail;
         }
         base.sku = String(priced?.sku || base.sku);
+        // Keep the Printful IDs checkout needs for fulfillment (sync variant = store product with design).
+        base.printfulSyncVariantId = priced?.id != null ? String(priced.id) : "";
+        base.printfulVariantId = priced?.variant_id != null ? String(priced.variant_id) : "";
+        base.printfulExternalVariantId = priced?.external_id != null ? String(priced.external_id) : "";
         const preview = priced?.files?.find?.((f: any) => f?.type === "preview")?.preview_url;
         if (preview) base.image = String(preview);
       }
@@ -148,6 +171,7 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
   const priced = await Promise.all(
     slice.map(async (row, index) => {
       let cost = 0;
+      let variantId = "";
       try {
         const detailRes = await fetch(`${BASE}/products/${row.id}`, { headers });
         if (detailRes.ok) {
@@ -155,10 +179,11 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
           const variants = Array.isArray(detail?.result?.variants) ? detail.result.variants : [];
           const inStock = variants.find((v: any) => v?.in_stock && money(v?.price) > 0) || variants.find((v: any) => money(v?.price) > 0);
           cost = money(inStock?.price);
+          variantId = inStock?.id != null ? String(inStock.id) : "";
           if (inStock?.image) row.image = inStock.image;
         }
       } catch (_) {}
-      const item = normalizeCatalog(row, index, sector, cost);
+      const item = normalizeCatalog(row, index, sector, cost, variantId);
       if (!item.suggestedRetailUsd) {
         item.supplierPriceUsd = 12;
         item.suggestedRetailUsd = 28.9;
@@ -187,7 +212,7 @@ export async function onRequestGet(context: any) {
           supplier: "Printful",
           sector,
           query: sector,
-          products: storeProducts.slice(0, 50),
+          products: await withQuotes(context.env, "printful", storeProducts.slice(0, 50), printfulIds),
           count: Math.min(storeProducts.length, 50),
           source: "printful-live-store",
           markets: ["NO", "EU", "PE"],
@@ -202,7 +227,7 @@ export async function onRequestGet(context: any) {
       supplier: "Printful",
       sector,
       query: sector,
-      products: catalog,
+      products: await withQuotes(context.env, "printful", catalog, printfulIds),
       count: catalog.length,
       source: "printful-live-catalog",
       markets: ["NO", "EU", "PE"],

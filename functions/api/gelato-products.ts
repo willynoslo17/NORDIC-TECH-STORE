@@ -1,3 +1,5 @@
+import { withQuotes } from "../_shared/quote";
+
 const PRODUCT_BASE = "https://product.gelatoapis.com";
 const ECOM_BASE = "https://ecommerce.gelatoapis.com";
 
@@ -559,6 +561,10 @@ async function loadCatalogProducts(headers: Record<string, string>, sector: stri
   return out.slice(0, 50);
 }
 
+function gelatoIds(product: any) {
+  return { gelato_product_uid: product?.gelatoProductUid };
+}
+
 export async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
@@ -588,7 +594,7 @@ export async function onRequestGet(context: any) {
           supplier: "Gelato",
           sector,
           query: sector,
-          products: storeProducts.slice(0, 50),
+          products: await withQuotes(context.env, "gelato", storeProducts.slice(0, 50), gelatoIds),
           count: Math.min(storeProducts.length, 50),
           source: "gelato-live-store",
           storeId,
@@ -604,7 +610,7 @@ export async function onRequestGet(context: any) {
       supplier: "Gelato",
       sector,
       query: sector,
-      products: catalog,
+      products: await withQuotes(context.env, "gelato", catalog, gelatoIds),
       count: catalog.length,
       source: "gelato-live-catalog",
       markets: ["NO", "EU", "PE"],

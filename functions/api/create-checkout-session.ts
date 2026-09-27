@@ -1,26 +1,31 @@
 import cjCatalog from "../../catalog/selected-products.json";
+import printifySelected from "../../catalog/printify-selected.json";
 import printifyCatalog from "../../catalog/printify-products.json";
 import gelatoCatalog from "../../catalog/gelato-products.json";
 import printfulCatalog from "../../catalog/printful-products.json";
+import { STORE } from "../_shared/store";
+import { displayUsd, verifyQuote, SUPPLIER_ID_FIELDS, type SupplierIds } from "../_shared/quote";
+import { resolveCjVariant } from "../_shared/cj";
 
-type Env = { STRIPE_SECRET_KEY?: string };
-type CartItem = { id: string | number; quantity: number; sku?: string; provider?: string; name?: string; usd?: number };
+type Env = { STRIPE_SECRET_KEY?: string; CJ_API_KEY?: string };
+/** Browser cart line. Prices are never read from here, only identifiers and the server-signed quote. */
+type CartItem = { id?: string | number; ref?: string; sku?: string; provider?: string; quantity?: number; quote?: string };
 type CheckoutPayload = {
   market: "NO" | "EU" | "PE";
   items: CartItem[];
   email: string;
   order_id: string;
 };
-type CatalogRow = {
-  name?: string;
-  sku?: string;
-  suggestedRetailUsd?: number;
-  supplierPriceUsd?: number;
-  supplier?: string;
-  provider?: string;
-  id?: string | number;
-  printifyProductId?: string;
-  printifyVariantId?: string | number;
+type Provider = "cj" | "printify" | "gelato" | "printful";
+type ResolvedLine = {
+  provider: Provider;
+  ref: string;
+  sku: string;
+  name: string;
+  usd: number;
+  ids: SupplierIds;
+  pricingSource: "quote" | "catalog";
+  match: string;
 };
 
 const markets = {
@@ -29,76 +34,101 @@ const markets = {
   PE: { currency: "pen", rate: 4.05, shipping: 14 },
 } as const;
 
-type ProductEntry = { name: string; sku: string; usd: number; provider: string };
+/** Countries Stripe Checkout accepts as shipping destinations: Norway/EEA, EU-27, UK, CH, US, CA and PE (Peru market). */
+const SHIPPING_COUNTRIES = [
+  "NO", "IS", "LI",
+  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV",
+  "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
+  "GB", "CH", "US", "CA", "PE",
+];
 
-function normalizeProvider(raw: string | undefined): string {
+const PROVIDERS: Provider[] = ["cj", "printify", "gelato", "printful"];
+const MAX_CJ_LOOKUPS = 5;
+
+function normalizeProvider(raw: unknown): Provider | "" {
   const value = String(raw || "").toLowerCase();
   if (value.includes("printify")) return "printify";
   if (value.includes("printful")) return "printful";
   if (value.includes("gelato")) return "gelato";
   if (value.includes("cj")) return "cj";
-  return value || "cj";
+  return "";
 }
 
-function toEntry(product: CatalogRow): ProductEntry {
+type StaticRow = Record<string, any>;
+function staticIds(provider: Provider, row: StaticRow): SupplierIds {
+  if (provider === "cj") return { cj_pid: row.id != null ? String(row.id) : "", cj_vid: String(row.vid || row.cjVid || "") };
+  if (provider === "printify") return { printify_product_id: String(row.printifyProductId || ""), printify_variant_id: String(row.printifyVariantId || "") };
+  if (provider === "gelato") return { gelato_product_uid: String(row.gelatoProductUid || "") };
   return {
-    name: String(product.name || "Product").slice(0, 200),
-    sku: String(product.sku || product.printifyVariantId || "").slice(0, 100),
-    usd: Number(product.suggestedRetailUsd || product.supplierPriceUsd || 0),
-    provider: normalizeProvider(product.provider || product.supplier),
+    printful_product_id: String(row.printfulProductId || ""),
+    printful_sync_variant_id: String(row.printfulSyncVariantId || ""),
+    printful_variant_id: String(row.printfulVariantId || ""),
+    printful_external_variant_id: String(row.printfulExternalVariantId || ""),
   };
 }
 
-const products = new Map<string, ProductEntry>();
+/** Server-bundled catalogs (the same JSON the storefront falls back to), indexed by provider + ref and provider + sku. */
+const staticIndex = new Map<string, StaticRow>();
+function indexRows(provider: Provider, rows: unknown) {
+  if (!Array.isArray(rows)) return;
+  for (const row of rows as StaticRow[]) {
+    if (!row || !displayUsd(row)) continue;
+    const ref = row.id != null ? String(row.id) : "";
+    const sku = String(row.sku || "");
+    if (ref && !staticIndex.has(`${provider}|ref|${ref}`)) staticIndex.set(`${provider}|ref|${ref}`, row);
+    if (sku && !staticIndex.has(`${provider}|sku|${sku}`)) staticIndex.set(`${provider}|sku|${sku}`, row);
+  }
+}
+indexRows("cj", cjCatalog);
+indexRows("printify", printifySelected);
+indexRows("printify", printifyCatalog);
+indexRows("gelato", gelatoCatalog);
+indexRows("printful", printfulCatalog);
 
-(cjCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
-  const entry = toEntry(product);
-  products.set(String(index + 1), entry);
-  products.set(String(10001 + index), entry);
-  if (product.id != null) products.set(String(product.id), entry);
-  if (entry.sku) products.set(entry.sku, entry);
-});
-
-(printifyCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
-  const entry = toEntry({ ...product, provider: "printify", supplier: "Printify" });
-  products.set(String(20001 + index), entry);
-  if (product.id != null) products.set(String(product.id), entry);
-  if (entry.sku) products.set(entry.sku, entry);
-});
-
-(gelatoCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
-  const entry = toEntry({ ...product, provider: "gelato", supplier: "Gelato" });
-  products.set(String(30001 + index), entry);
-  if (product.id != null) products.set(String(product.id), entry);
-  if (entry.sku) products.set(entry.sku, entry);
-});
-
-(printfulCatalog as CatalogRow[]).slice(0, 30).forEach((product, index) => {
-  const entry = toEntry({ ...product, provider: "printful", supplier: "Printful" });
-  products.set(String(40001 + index), entry);
-  if (product.id != null) products.set(String(product.id), entry);
-  if (entry.sku) products.set(entry.sku, entry);
-});
-
-function resolveProduct(item: CartItem): ProductEntry | undefined {
-  const mapped = products.get(String(item.id))
-    || (item.sku ? products.get(String(item.sku)) : undefined);
-  if (mapped) return mapped;
-  const usd = Number(item.usd || 0);
-  const provider = normalizeProvider(item.provider);
-  if (usd > 0 && item.name && ["cj", "printify", "gelato", "printful"].includes(provider)) {
+function staticLookup(item: CartItem): ResolvedLine | null {
+  const claimed = normalizeProvider(item.provider);
+  const providers = claimed ? [claimed] : PROVIDERS;
+  const ref = String(item.ref ?? "").trim();
+  const sku = String(item.sku ?? "").trim();
+  for (const provider of providers) {
+    const row = (ref && staticIndex.get(`${provider}|ref|${ref}`)) || (sku && staticIndex.get(`${provider}|sku|${sku}`));
+    if (!row) continue;
     return {
-      name: String(item.name).slice(0, 200),
-      sku: String(item.sku || "").slice(0, 100),
-      usd,
       provider,
+      ref: row.id != null ? String(row.id) : ref,
+      sku: String(row.sku || ""),
+      name: String(row.name || "Product").slice(0, 200),
+      usd: displayUsd(row),
+      ids: staticIds(provider, row),
+      pricingSource: "catalog",
+      match: "",
     };
   }
-  return undefined;
+  return null;
 }
 
-function json(error: string, status: number) {
-  return Response.json({ error }, { status });
+async function resolveLine(item: CartItem, env: Env): Promise<ResolvedLine | null> {
+  if (item && typeof item.quote === "string" && item.quote) {
+    const quote = await verifyQuote(env, item.quote);
+    const provider = quote ? normalizeProvider(quote.p) : "";
+    if (quote && provider) {
+      return {
+        provider,
+        ref: quote.r,
+        sku: quote.k,
+        name: quote.n || "Product",
+        usd: quote.u,
+        ids: quote.x || {},
+        pricingSource: "quote",
+        match: quote.m || "",
+      };
+    }
+  }
+  return staticLookup(item);
+}
+
+function json(error: string, status: number, extra: Record<string, unknown> = {}) {
+  return Response.json({ error, ...extra }, { status });
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -110,27 +140,31 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   try { body = await context.request.json(); }
   catch { return json("Invalid JSON", 400); }
 
-  const market = markets[body.market];
+  const market = markets[body?.market];
   if (!market || !Array.isArray(body.items) || !body.items.length || body.items.length > 30) {
     return json("Invalid cart", 400);
   }
   if (typeof body.email !== "string" || !body.email.includes("@")) return json("Invalid email", 400);
 
-  let lines: { product: ProductEntry; quantity: number; amount: number }[];
-  try {
-    lines = body.items.map((item) => {
-      const product = resolveProduct(item);
-      const quantity = Math.max(1, Math.min(10, Math.trunc(Number(item.quantity) || 0)));
-      if (!product || !Number.isFinite(product.usd) || product.usd <= 0) throw new Error("Invalid product");
-      const provider = normalizeProvider(item.provider || product.provider);
-      return {
-        product: { ...product, provider },
-        quantity,
-        amount: Math.max(50, Math.round(product.usd * market.rate * 100)),
-      };
-    });
-  } catch {
-    return json("Invalid product", 400);
+  // Every line is priced from server data (signed catalog quote or bundled catalog). Anything else is rejected.
+  const lines: { product: ResolvedLine; quantity: number; amount: number }[] = [];
+  for (let index = 0; index < body.items.length; index++) {
+    const item = body.items[index] || {};
+    const product = await resolveLine(item, context.env);
+    if (!product || !Number.isFinite(product.usd) || product.usd <= 0) {
+      return json("Invalid product", 400, { line: index });
+    }
+    const quantity = Math.max(1, Math.min(10, Math.trunc(Number(item.quantity) || 0)));
+    lines.push({ product, quantity, amount: Math.max(50, Math.round(product.usd * market.rate * 100)) });
+  }
+
+  // CJ: resolve the default variant (vid) server-side. Checkout still proceeds if it fails; the webhook then reports it in missing_ids.
+  let cjLookups = 0;
+  for (const line of lines) {
+    if (line.product.provider !== "cj" || line.product.ids.cj_vid || !line.product.ids.cj_pid) continue;
+    if (cjLookups++ >= MAX_CJ_LOOKUPS) break;
+    const variant = await resolveCjVariant(String(line.product.ids.cj_pid), context.env);
+    if (variant) line.product.ids = { ...line.product.ids, cj_vid: variant.vid };
   }
 
   const providers = [...new Set(lines.map((line) => line.product.provider))];
@@ -140,25 +174,46 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     success_url: `${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/?payment=cancelled`,
     customer_email: body.email.slice(0, 254),
-    "metadata[store]": "nordic-tech-store",
+    "phone_number_collection[enabled]": "true",
+    "metadata[schema]": "nordic-order/v2",
+    "metadata[store]": STORE.slug,
+    "metadata[brand]": STORE.brand,
+    "metadata[domain]": STORE.domain,
     "metadata[order_id]": String(body.order_id || "").slice(0, 100),
     "metadata[market]": body.market,
-    "metadata[provider]": providers[0] || "cj",
+    "metadata[provider]": providers.length === 1 ? providers[0] : "mixed",
     "metadata[providers]": providers.join(",").slice(0, 100),
+  });
+  SHIPPING_COUNTRIES.forEach((country, index) => {
+    params.set(`shipping_address_collection[allowed_countries][${index}]`, country);
   });
 
   lines.forEach((line, index) => {
-    params.set(`line_items[${index}][price_data][currency]`, market.currency);
-    params.set(`line_items[${index}][price_data][unit_amount]`, String(line.amount));
-    params.set(`line_items[${index}][price_data][product_data][name]`, line.product.name);
-    params.set(`line_items[${index}][price_data][product_data][metadata][sku]`, line.product.sku);
-    params.set(`line_items[${index}][price_data][product_data][metadata][provider]`, line.product.provider);
+    const prefix = `line_items[${index}][price_data]`;
+    const meta = `${prefix}[product_data][metadata]`;
+    params.set(`${prefix}[currency]`, market.currency);
+    params.set(`${prefix}[unit_amount]`, String(line.amount));
+    params.set(`${prefix}[product_data][name]`, line.product.name);
+    params.set(`${meta}[kind]`, "product");
+    params.set(`${meta}[store]`, STORE.slug);
+    params.set(`${meta}[line_index]`, String(index));
+    params.set(`${meta}[provider]`, line.product.provider);
+    params.set(`${meta}[pricing_source]`, line.product.pricingSource);
+    params.set(`${meta}[unit_usd]`, String(line.product.usd));
+    if (line.product.sku) params.set(`${meta}[sku]`, line.product.sku.slice(0, 500));
+    if (line.product.ref) params.set(`${meta}[ref]`, line.product.ref.slice(0, 500));
+    if (line.product.match) params.set(`${meta}[printify_match]`, line.product.match);
+    for (const field of SUPPLIER_ID_FIELDS) {
+      const value = line.product.ids[field];
+      if (value) params.set(`${meta}[${field}]`, String(value).slice(0, 500));
+    }
     params.set(`line_items[${index}][quantity]`, String(line.quantity));
   });
   const shippingIndex = lines.length;
   params.set(`line_items[${shippingIndex}][price_data][currency]`, market.currency);
   params.set(`line_items[${shippingIndex}][price_data][unit_amount]`, String(Math.round(market.shipping * 100)));
   params.set(`line_items[${shippingIndex}][price_data][product_data][name]`, "Standard shipping");
+  params.set(`line_items[${shippingIndex}][price_data][product_data][metadata][kind]`, "shipping");
   params.set(`line_items[${shippingIndex}][quantity]`, "1");
 
   const stripe = await fetch("https://api.stripe.com/v1/checkout/sessions", {

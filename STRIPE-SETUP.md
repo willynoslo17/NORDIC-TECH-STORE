@@ -27,3 +27,16 @@ Free dashboard keys — no test/placeholder mode. Leave unset for empty POD cata
 Catalog endpoints: `/api/printify-products`, `/api/gelato-products`, `/api/printful-products` (same live-with-local-fallback model as CJ).
 Storefront keeps suppliers separate via switcher (CJ | Printify | Gelato | Printful); catalogs are never blended into one array.
 
+## Checkout v2 (shipping address, supplier IDs, paid-only webhook)
+
+- Stripe Checkout collects a **shipping address** (NO/EEA, EU-27, GB, CH, US, CA, PE) and a **phone number**.
+- Subscribe the webhook to `checkout.session.completed` **and** `checkout.session.async_payment_succeeded`.
+  Only sessions with `payment_status = paid` and `metadata.store = nordic-tech-store` are forwarded to `MAKE_ORDERS_WEBHOOK`.
+- Payload schema `nordic-order/v2`: per-line provider, sku, quantity and supplier IDs, `groups`, `providers`, `missing_ids`,
+  `shipping`, `event_id` (deduplicate on it or on `stripe_session_id`). See `functions/_shared/order-payload.ts`.
+- Prices are never taken from the browser: each line is priced from a server-signed catalog quote
+  (key derived from `STRIPE_SECRET_KEY`) or from the bundled `catalog/*.json`. Anything else is rejected.
+- CJ lines: the default variant `vid` is resolved at checkout with `CJ_API_KEY`. Stores without the key ask
+  `https://nordic-beauty-perfumes.pages.dev/api/cj-variant`. If that fails, the line is listed in `missing_ids`.
+- `/api/order` is retired (HTTP 410) and no longer posts to Make.
+

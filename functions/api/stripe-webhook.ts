@@ -1,3 +1,6 @@
+import { STORE } from "../_shared/store";
+import { buildOrderPayload } from "../_shared/order-payload";
+
 type Env = {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
@@ -7,25 +10,12 @@ type Env = {
 type StripeEvent = {
   id?: string;
   type?: string;
+  livemode?: boolean;
   data?: { object?: Record<string, unknown> };
 };
 
-type AddressLike = {
-  line1?: string;
-  line2?: string;
-  city?: string;
-  state?: string;
-  postal_code?: string;
-  country?: string;
-};
-
-type LineItemOut = {
-  description: string;
-  quantity: number;
-  amount_total: number;
-  currency: string;
-  price_id: string;
-};
+/** Events that can carry a paid Checkout Session. Anything else is acknowledged and ignored. */
+const ORDER_EVENTS = new Set(["checkout.session.completed", "checkout.session.async_payment_succeeded"]);
 
 function hex(bytes: ArrayBuffer) {
   return Array.from(new Uint8Array(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -55,56 +45,30 @@ async function validSignature(payload: string, signature: string, secret: string
   return signatures.some((candidate) => safeEqual(candidate, expected));
 }
 
-function asRecord(value: unknown): Record<string, unknown> {
-  return value && typeof value === "object" ? (value as Record<string, unknown>) : {};
-}
-
-function str(value: unknown) {
-  return value == null ? "" : String(value);
-}
-
-function buildShipping(session: Record<string, unknown>) {
-  const shippingDetails = asRecord(session.shipping_details);
-  const customerDetails = asRecord(session.customer_details);
-  const shippingAddress = asRecord(shippingDetails.address);
-  const customerAddress = asRecord(customerDetails.address);
-  const addr = (shippingAddress.line1 || shippingAddress.country ? shippingAddress : customerAddress) as AddressLike;
-  return {
-    name: str(shippingDetails.name || customerDetails.name || ""),
-    phone: str(shippingDetails.phone || customerDetails.phone || ""),
-    line1: str(addr.line1 || ""),
-    line2: str(addr.line2 || ""),
-    city: str(addr.city || ""),
-    state: str(addr.state || ""),
-    postal_code: str(addr.postal_code || ""),
-    country: str(addr.country || ""),
-  };
-}
-
-async function fetchLineItems(sessionId: string, secretKey: string): Promise<LineItemOut[]> {
-  if (!sessionId || !secretKey) return [];
-  try {
-    const response = await fetch(
-      `https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/line_items?limit=100`,
-      {
-        headers: { Authorization: `Bearer ${secretKey}` },
-      }
-    );
-    if (!response.ok) return [];
-    const body = (await response.json()) as { data?: Array<Record<string, unknown>> };
-    return (body.data || []).map((item) => {
-      const price = asRecord(item.price);
-      return {
-        description: str(item.description || ""),
-        quantity: Number(item.quantity || 0),
-        amount_total: Number(item.amount_total || 0),
-        currency: str(item.currency || ""),
-        price_id: str(price.id || ""),
-      };
-    });
-  } catch {
-    return [];
+/** All line items of the session with price.product expanded (product metadata = provider, sku, supplier IDs). */
+async function fetchLineItems(sessionId: string, secretKey: string): Promise<Array<Record<string, unknown>> | null> {
+  if (!sessionId || !secretKey) return null;
+  const items: Array<Record<string, unknown>> = [];
+  let startingAfter = "";
+  for (let page = 0; page < 10; page++) {
+    const url = new URL(`https://api.stripe.com/v1/checkout/sessions/${encodeURIComponent(sessionId)}/line_items`);
+    url.searchParams.set("limit", "100");
+    url.searchParams.append("expand[]", "data.price.product");
+    if (startingAfter) url.searchParams.set("starting_after", startingAfter);
+    try {
+      const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${secretKey}` } });
+      if (!response.ok) return null;
+      const body = (await response.json()) as { data?: Array<Record<string, unknown>>; has_more?: boolean };
+      const data = Array.isArray(body.data) ? body.data : [];
+      items.push(...data);
+      if (!body.has_more || !data.length) return items;
+      startingAfter = String(data[data.length - 1].id || "");
+      if (!startingAfter) return items;
+    } catch {
+      return null;
+    }
   }
+  return items;
 }
 
 export async function onRequestPost(context: { request: Request; env: Env }) {
@@ -122,39 +86,31 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   try { event = JSON.parse(payload); }
   catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
 
-  if (event.type !== "checkout.session.completed") return Response.json({ received: true });
+  if (!ORDER_EVENTS.has(String(event.type))) return Response.json({ received: true });
   const session = event.data?.object || {};
-  const meta = asRecord(session.metadata);
-  const customerDetails = asRecord(session.customer_details);
-  const sessionId = str(session.id);
-  const lineItems = await fetchLineItems(sessionId, context.env.STRIPE_SECRET_KEY || "");
+  const meta = (session.metadata && typeof session.metadata === "object" ? session.metadata : {}) as Record<string, unknown>;
 
-  const confirmation = {
-    source: "stripe",
-    event_id: String(event.id || ""),
-    event_type: event.type,
-    store: "nordic-tech-store",
-    order_id: str(meta.order_id || ""),
-    market: str(meta.market || ""),
-    provider: str(meta.provider || ""),
-    payment_status: str(session.payment_status || ""),
-    customer_email: str(customerDetails.email || session.customer_email || ""),
-    customer_name: str(customerDetails.name || ""),
-    customer_phone: str(customerDetails.phone || ""),
-    shipping: buildShipping(session),
-    line_items: lineItems,
-    amount_total: Number(session.amount_total || 0),
-    currency: str(session.currency || ""),
-    stripe_session_id: sessionId,
-    received_at: new Date().toISOString(),
-  };
+  // Several stores may share one Stripe account: only forward this store's sessions.
+  if (meta.store && String(meta.store) !== STORE.slug) {
+    return Response.json({ received: true, forwarded: false, reason: "other_store" });
+  }
+  // Paid orders only. Delayed methods arrive later as checkout.session.async_payment_succeeded.
+  if (String(session.payment_status || "") !== "paid") {
+    return Response.json({ received: true, forwarded: false, reason: `payment_status_${String(session.payment_status || "unknown")}` });
+  }
+
+  const lineItems = await fetchLineItems(String(session.id || ""), context.env.STRIPE_SECRET_KEY || "");
+  // Don't forward an order without its lines. A non-2xx makes Stripe retry later.
+  if (!lineItems) return Response.json({ error: "Could not load line items" }, { status: 502 });
+
+  const order = buildOrderPayload(event as Record<string, unknown>, session, lineItems);
   const response = await fetch(makeHook, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify(confirmation),
+    body: JSON.stringify(order),
   });
   if (!response.ok) return Response.json({ error: "Automation unavailable" }, { status: 502 });
-  return Response.json({ received: true });
+  return Response.json({ received: true, forwarded: true });
 }
 
 export function onRequest() {

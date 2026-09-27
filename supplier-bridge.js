@@ -75,7 +75,11 @@
   function curated(item, index, category, provider) {
     const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || item.base || 0);
     const baseId = ID_BASE[provider] || 90001;
-    const numericId = item.id != null && Number.isFinite(Number(item.id)) ? Number(item.id) : null;
+    const rawId = item.id != null ? String(item.id) : "";
+    /* UI ids must be exact numbers. Long supplier ids (19-digit CJ pids) are never rounded:
+       the UI uses their last 15 digits and the full id stays a string in externalId / cjPid. */
+    const tail = /^\d+$/.test(rawId) ? (Number.isSafeInteger(Number(rawId)) ? Number(rawId) : Number(rawId.slice(-15))) : 0;
+    const numericId = tail > 0 ? tail : null;
     const out = {
       id: numericId != null ? numericId : baseId + index,
       externalId: String(item.id || item.gelatoProductUid || item.printfulProductId || item.printifyProductId || ""),
@@ -95,6 +99,10 @@
     if (item.printifyVariantId) out.printifyVariantId = item.printifyVariantId;
     if (item.printfulProductId) out.printfulProductId = item.printfulProductId;
     if (item.gelatoProductUid) out.gelatoProductUid = item.gelatoProductUid;
+    if (item.printfulSyncVariantId) out.printfulSyncVariantId = String(item.printfulSyncVariantId);
+    if (item.printfulVariantId) out.printfulVariantId = String(item.printfulVariantId);
+    if (provider === "cj" && rawId) out.cjPid = rawId;
+    if (item.quote) out.quote = String(item.quote);
     return out;
   }
 
@@ -204,10 +212,22 @@
     });
   }
 
+  /* The grid shows one supplier, but the cart may hold items from several. Cart rendering looks items up
+     with list.find(), so find() on the active list also searches the other supplier catalogs. */
+  function withCrossCatalogFind(list, mapper) {
+    const all = Object.keys(window.nordicCatalogs || {}).flatMap(k => Array.isArray(window.nordicCatalogs[k]) ? window.nordicCatalogs[k] : []);
+    const pool = mapper ? all.map(mapper) : all;
+    Object.defineProperty(list, "find", {
+      value: function (predicate, thisArg) { return Array.prototype.find.call(this, predicate, thisArg) || pool.find(predicate, thisArg); },
+      configurable: true, writable: true, enumerable: false
+    });
+    return list;
+  }
+
   function applyActiveCatalog(supplier) {
     const key = LABELS[supplier] ? supplier : "cj";
     window.nordicActiveSupplier = key;
-    const list = (window.nordicCatalogs[key] || []).slice();
+    const list = withCrossCatalogFind((window.nordicCatalogs[key] || []).slice());
     if (typeof products !== "undefined") {
       try { products = list; } catch (_) { window.products = list; }
     } else {
@@ -215,7 +235,8 @@
     }
     if (typeof data !== "undefined") {
       try {
-        data = list.map(x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key, brand: x.brand || LABELS[key] }));
+        const toData = x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key, brand: x.brand || LABELS[x.provider] || LABELS[key] });
+        data = withCrossCatalogFind(list.map(toData), toData);
       } catch (_) {}
     }
     if (typeof filter !== "undefined") { try { filter = "All"; } catch (_) {} }

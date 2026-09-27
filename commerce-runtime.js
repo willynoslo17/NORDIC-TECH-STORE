@@ -53,6 +53,17 @@
     return currentProducts().find(item => String(item.id) === String(id));
   }
 
+  /* Full product record (incl. server-signed quote and supplier refs) from any supplier catalog. */
+  function catalogProductById(id) {
+    const catalogs = window.nordicCatalogs || {};
+    for (const key of Object.keys(catalogs)) {
+      const list = Array.isArray(catalogs[key]) ? catalogs[key] : [];
+      const hit = list.find(item => String(item.id) === String(id));
+      if (hit) return hit;
+    }
+    return productById(id);
+  }
+
   function saveCartSoon() {
     setTimeout(() => {
       write(CART_KEY, cartObject());
@@ -175,8 +186,9 @@
       event.preventDefault();
       if (!form.reportValidity()) return;
       const items = Object.entries(cartObject()).map(([id, quantity]) => {
-        const item = productById(id) || {};
-        return { id, sku: item.sku || "", name: item.name || item.n || "Product", quantity, provider: item.provider || "", usd: Number(item.base || item.p || 0) };
+        const item = catalogProductById(id) || {};
+        /* No prices are sent: the server prices each line from its signed quote or its own catalog. */
+        return { id, ref: String(item.externalId || ""), sku: item.sku || "", name: item.name || item.n || "Product", quantity, provider: item.provider || "", quote: item.quote || "" };
       });
       if (!items.length) return;
       const id = "NORD-" + Date.now().toString(36).toUpperCase();
