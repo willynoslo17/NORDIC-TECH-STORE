@@ -1,0 +1,23 @@
+*{box-sizing:border-box}html{scroll-behavior:smooth}
+body{margin:0;background:#07090d;color:#f4f7fb;font-family:Inter,Arial,sans-serif;line-height:1.65}
+a{color:#6ba3ff}
+.lg-nav{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;gap:12px;padding:16px 5%;background:rgba(7,9,13,.92);backdrop-filter:blur(12px);border-bottom:1px solid #1c2633}
+.lg-brand{font-weight:900;letter-spacing:2.6px;font-size:18px;color:#f4f7fb;text-decoration:none}
+.lg-back{color:#8f9aac;text-decoration:none;font-size:14px}
+.lg-main{max-width:860px;margin:0 auto;padding:36px 5% 60px}
+.lg-lang{display:flex;gap:10px;align-items:center;font-size:13px;color:#8f9aac;margin-bottom:10px}
+.lg-lang a{border:1px solid #1c2633;padding:6px 12px;text-decoration:none;color:#f4f7fb;border-radius:0}
+.lg-toc{display:flex;flex-wrap:wrap;gap:6px 14px;font-size:13px;margin:0 0 26px;padding:14px 0;border-bottom:1px solid #1c2633}
+.lg-toc a{color:#8f9aac}.lg-toc a[aria-current]{color:#f4f7fb;font-weight:700}
+article{background:#0e1219;border:1px solid #1c2633;padding:28px 30px;margin:0 0 26px;border-radius:0}
+h1{font-family:Inter,Arial,sans-serif;font-size:38px;line-height:1.1;margin:0 0 14px}
+h2{font-size:19px;margin:28px 0 8px}
+.lg-meta{color:#8f9aac;font-size:13px}
+.lg-table{width:100%;border-collapse:collapse;font-size:14px;margin:10px 0}
+.lg-table th,.lg-table td{text-align:left;vertical-align:top;border-bottom:1px solid #1c2633;padding:9px 8px}
+.lg-btn{display:inline-block;background:#eaf2ff;color:#07101c;border:0;padding:12px 18px;font-weight:800;text-decoration:none;cursor:pointer;border-radius:0;font:inherit;font-weight:800}
+.lg-form .lg-line{display:inline-block;min-width:260px;border-bottom:1px solid #8f9aac;height:1.3em;margin:0 6px 4px 0}
+.lg-form p{margin:10px 0}
+.footer{padding:30px 5%;border-top:1px solid #1c2633;color:#8f9aac;font-size:13px;max-width:none}
+@media(max-width:640px){article{padding:20px 16px}h1{font-size:30px}.lg-table{font-size:13px}.lg-form .lg-line{min-width:160px}}
+@media print{.lg-nav,.lg-lang,.lg-toc,.lg-noprint,.footer{display:none!important}article+article{break-before:page}body{background:#fff;color:#000}article{border:0;padding:0;background:#fff}.lg-form .lg-line{border-color:#000}a{color:#000}}

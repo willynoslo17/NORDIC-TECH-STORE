@@ -1,4 +1,5 @@
 import { withQuotes } from "../_shared/quote";
+import { STORE } from "../_shared/store";
 
 const BASE = "https://api.printful.com";
 
@@ -36,12 +37,12 @@ function money(value: unknown) {
 
 function resolveSector(raw: string) {
   const key = String(raw || "").toLowerCase().trim();
-  if (!key) return "beauty";
+  if (!key) return STORE.sector;
   if (SECTOR_ALIASES[key]) return SECTOR_ALIASES[key];
   for (const [alias, sector] of Object.entries(SECTOR_ALIASES)) {
     if (key.includes(alias) || alias.includes(key)) return sector;
   }
-  return SECTOR_ALIASES[key] ? SECTOR_ALIASES[key] : (SECTOR_CATEGORIES[key] ? key : "beauty");
+  return SECTOR_ALIASES[key] ? SECTOR_ALIASES[key] : (SECTOR_CATEGORIES[key] ? key : STORE.sector);
 }
 
 function printfulIds(product: any) {
@@ -197,7 +198,8 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
 export async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
-  const sector = resolveSector(wanted || "beauty");
+  // Each shop serves its own sector only (a missing or foreign ?q= used to fall back to "beauty").
+  const sector = STORE.sector;
   const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
   const token = context.env.PRINTFUL_API_TOKEN ? String(context.env.PRINTFUL_API_TOKEN) : "";
   const storeId = context.env.PRINTFUL_STORE_ID ? String(context.env.PRINTFUL_STORE_ID) : "";

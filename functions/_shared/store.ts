@@ -4,4 +4,6 @@ export const STORE = {
   brand: "Novverk",
   domain: "novverk.no",
   siteUrl: "https://novverk.no/",
+  /** Catalog sector used by the Gelato/Printful endpoints (never taken from the query string). */
+  sector: "electronics",
 } as const;

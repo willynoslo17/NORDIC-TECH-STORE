@@ -136,7 +136,15 @@
     }
   }
 
+  /* Items whose name matches config.cjExclude are hidden unless CJ reports a CE certification. */
+  function cjAllowed(config) {
+    if (!config || !config.cjExclude) return () => true;
+    const rx = new RegExp(config.cjExclude, "i");
+    return item => !rx.test(String(item.name || item.nameEn || "")) || item.hasCECertification === true || item.hasCECertification === "true";
+  }
+
   async function loadCjSelected(config) {
+    const allowed = cjAllowed(config);
     const timeout = new AbortController();
     const timer = setTimeout(() => timeout.abort(), 28000);
     try {
@@ -146,11 +154,13 @@
         const payload = await response.json();
         if (Array.isArray(payload.products) && payload.products.length) {
           return payload.products
+            .filter(allowed)
             .map((item, index) => curated({ ...item, brand: item.brand || "CJ Dropshipping", supplier: item.supplier || "CJ Dropshipping" }, index, config.category, "cj"))
             .filter(item => item.base > 0)
             .slice(0, 150);
         }
         const live = rows(payload)
+          .filter(allowed)
           .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
           .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
           .map((item, index) => ({
@@ -175,7 +185,7 @@
       clearTimeout(timer);
     }
     const localItems = await loadJson(LOCAL_FILES.cj);
-    return localItems.map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 150);
+    return localItems.filter(allowed).map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 150);
   }
 
   async function loadPodCatalog(provider, category, query) {
@@ -304,7 +314,8 @@
     ]);
     window.nordicCatalogs = { cj, printify, gelato, printful };
     mountSwitcher();
-    const active = applyActiveCatalog("cj");
+    const first = ["cj", "printify", "gelato", "printful"].find(k => window.nordicCatalogs[k].length) || "cj";
+    const active = applyActiveCatalog(first);
     if (!cj.length && !printify.length && !gelato.length && !printful.length) {
       setStatus("Catálogo local · proveedores en espera", false);
       return [];

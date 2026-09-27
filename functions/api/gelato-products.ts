@@ -1,4 +1,5 @@
 import { withQuotes } from "../_shared/quote";
+import { STORE } from "../_shared/store";
 
 const PRODUCT_BASE = "https://product.gelatoapis.com";
 const ECOM_BASE = "https://ecommerce.gelatoapis.com";
@@ -102,12 +103,12 @@ function money(value: unknown) {
 
 function resolveSector(raw: string) {
   const key = String(raw || "").toLowerCase().trim();
-  if (!key) return "beauty";
+  if (!key) return STORE.sector;
   if (SECTOR_ALIASES[key]) return SECTOR_ALIASES[key];
   for (const [alias, sector] of Object.entries(SECTOR_ALIASES)) {
     if (key.includes(alias) || alias.includes(key)) return sector;
   }
-  return SECTOR_CATALOGS[key] ? key : "beauty";
+  return SECTOR_CATALOGS[key] ? key : STORE.sector;
 }
 
 function humanizeToken(raw: string) {
@@ -568,7 +569,8 @@ function gelatoIds(product: any) {
 export async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
-  const sector = resolveSector(wanted || "beauty");
+  // Each shop serves its own sector only (a missing or foreign ?q= used to fall back to "beauty").
+  const sector = STORE.sector;
   const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
   const apiKey = context.env.GELATO_API_KEY;
   if (!apiKey) {

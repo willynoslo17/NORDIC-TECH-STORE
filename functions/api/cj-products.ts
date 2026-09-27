@@ -77,6 +77,12 @@ const BLOCK_BEAUTY =
   /\b(cure\b|cures\b|treats\b|prescription|drug\b|fda approved|anti[- ]?cancer|diagnos)\b/i;
 const BLOCK_KIDS =
   /\b(ce\s*certified\s*toy|en71\s*certified|medical device)\b/i;
+/** Listings whose supplier title makes health, medical, safety or performance claims are not shown. */
+const BLOCK_CLAIMS =
+  /\b(cures?|cured|healing|heals?|therap(?:y|eutic)|medical|medicine|clinically|pain relief|relieves? pain|anti[- ]?(?:anxiety|aging|ageing|wrinkle|inflammatory|bacterial|viral|choke|snoring)|anxiety relief|detox|weight loss|slimming|fat burn(?:ing|er)?|immune|disinfect\w*|sterili[sz]\w*|orthop(?:a)?edic|posture correct\w*|fuel sav\w*|save fuel|power sav\w*|energy sav\w*|electricity sav\w*|horsepower|performance chip)\b/i;
+/** Kids shop: items that are toys may only be listed when CJ reports a CE certification. */
+const KIDS_TOY =
+  /\b(toys?|montessori|puzzles?|building blocks?|plush|dolls?|rattles?|teethers?|games?)\b/i;
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -108,6 +114,7 @@ function flatten(data: any): any[] {
 
 function blocked(name: string): boolean {
   if (BLOCK_GENERAL.test(name)) return true;
+  if (BLOCK_CLAIMS.test(name)) return true;
   if (PROFILE.compliance === "beauty" && BLOCK_BEAUTY.test(name)) return true;
   if (PROFILE.compliance === "kids" && BLOCK_KIDS.test(name)) return true;
   if (PROFILE.compliance === "health_adjacent" && BLOCK_BEAUTY.test(name)) return true;
@@ -163,6 +170,7 @@ function ingest(byId: Map<string, any>, data: any) {
     const price = parsePrice(item.sellPrice || item.nowPrice);
     if (price <= 0 || price > 1000) continue;
     if (blocked(String(item.nameEn || item.name || ""))) continue;
+    if (PROFILE.compliance === "kids" && KIDS_TOY.test(String(item.nameEn || item.name || "")) && !(item.hasCECertification === true || item.hasCECertification === "true")) continue;
     const prev = byId.get(id);
     if (!prev || score(item) > score(prev)) byId.set(id, item);
   }
