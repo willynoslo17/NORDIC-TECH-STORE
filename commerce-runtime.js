@@ -2,7 +2,9 @@
 (function () {
   "use strict";
 
-  const STORE = (document.title || "Nordic Store").replace(/[^a-z0-9]+/gi, "-").toLowerCase();
+  const BRAND = "Novverk";
+  const SITE_URL = "https://novverk.no/";
+  const STORE = (document.title || BRAND).replace(/[^a-z0-9]+/gi, "-").toLowerCase();
   const CART_KEY = "nordic-cart:" + STORE;
   const ORDER_KEY = "nordic-orders:" + STORE;
   const CONTACT_EMAILS = {
@@ -122,7 +124,7 @@
     }
     const schema = document.createElement("script");
     schema.type = "application/ld+json";
-    schema.textContent = JSON.stringify({"@context":"https://schema.org","@type":"OnlineStore","name":document.title,"areaServed":["NO","EU","PE"],"currenciesAccepted":["NOK","EUR","PEN"]});
+    schema.textContent = JSON.stringify({"@context":"https://schema.org","@type":"OnlineStore","name":BRAND,"url":SITE_URL,"areaServed":["NO","EU","PE"],"currenciesAccepted":["NOK","EUR","PEN"]});
     document.head.appendChild(schema);
     const count = document.getElementById("count");
     if (count) count.setAttribute("aria-live", "polite");
@@ -131,8 +133,8 @@
   const pages = {
     shipping: '<h2>Shipping</h2><p>Delivery estimates and prices are shown in the cart for the selected market. Final availability depends on supplier stock and destination. Tracking is provided after supplier fulfilment.</p><p>Norway and European orders may be subject to VAT or customs rules. DDP will be preferred when the supplier confirms it.</p>',
     returns: '<h2>Returns and refunds</h2><p>Contact support within 14 days of delivery before returning an item. Products must be unused and in their original packaging. Faulty or incorrect products require photos and the order number.</p><p>Return eligibility, address and refund timing must be confirmed before shipment because products may come from different suppliers.</p>',
-    privacy: '<h2>Privacy</h2><p>Contact and delivery details are used to process your order. Card information is collected and processed securely by Stripe and is not stored by this storefront.</p><p>Data controller: Martinez Lozano Internasjonal Handel (ENK), Org. No. NO935407095MVA. Privacy enquiries: '+CONTACT_EMAILS.info+'.</p>',
-    terms: '<h2>Terms</h2><p>The final amount and currency are displayed by Stripe before payment. An order is accepted only after successful payment and supplier availability confirmation.</p>',
+    privacy: '<h2>Privacy</h2><p>Contact and delivery details are used to process your order. Card information is collected and processed securely by Stripe and is not stored by '+BRAND+'.</p><p>Data controller: Martinez Lozano Internasjonal Handel (ENK), Org. No. NO935407095MVA. Privacy enquiries: '+CONTACT_EMAILS.info+'.</p>',
+    terms: '<h2>Terms</h2><p>These terms apply to orders placed at '+BRAND+' ('+SITE_URL+'). '+BRAND+' is a trademark of ML Internasjonal.</p><p>The final amount and currency are displayed by Stripe before payment. An order is accepted only after successful payment and supplier availability confirmation.</p>',
     orders: ""
   };
 

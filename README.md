@@ -1,4 +1,6 @@
-# Nordic Tech Store
+# Novverk — Tech Store
+
+Storefront brand: **Novverk** · https://novverk.no/ · Novverk er et varemerke fra ML Internasjonal. (Repo / Pages project: `NORDIC-TECH-STORE`, formerly "Nordic Tech Store".)
 
 Static international storefront for Norway, Europe and Peru, operated by ML Internasjonal Handel.
 
