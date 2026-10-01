@@ -75,7 +75,7 @@
     const style = document.createElement("style");
     style.textContent = ".nordic-info-links{display:flex;gap:14px;flex-wrap:wrap;margin-top:14px}.nordic-info-links button{border:0;background:none;color:inherit;text-decoration:underline;cursor:pointer;padding:0}.nordic-info{position:fixed;inset:0;z-index:90;background:#000a;display:none;place-items:center;padding:18px}.nordic-info.open{display:grid}.nordic-info-card{width:min(680px,100%);max-height:88vh;overflow:auto;background:#fff;color:#172033;border-radius:16px;padding:24px;box-shadow:0 30px 90px #0006}.nordic-info-card>button{float:right;border:1px solid #ccd3dd;background:#fff;border-radius:8px;padding:8px 12px;cursor:pointer}.nordic-info-card h2{margin-top:8px}.nordic-info-card p,.nordic-info-card li{line-height:1.6}.nordic-info-card form{display:grid;grid-template-columns:1fr 1fr;gap:10px}.nordic-info-card input,.nordic-info-card select{border:1px solid #ccd3dd;border-radius:8px;padding:12px;width:100%}.nordic-info-card .full{grid-column:1/-1}.nordic-info-card form .checkout{float:none}.nordic-consent{font-size:12px;line-height:1.45;display:flex;gap:8px;align-items:flex-start}.nordic-consent input{width:auto!important;margin-top:3px}.nordic-consent a,.nordic-precontract a,#nordicPriceNotice a{color:inherit;text-decoration:underline}.nordic-precontract{font-size:12px;line-height:1.5;opacity:.85}.nordic-order-id{font:800 22px/1.3 ui-monospace,monospace;letter-spacing:1px}@media(max-width:560px){.nordic-info-card form{grid-template-columns:1fr}.nordic-info-card .full{grid-column:auto}}";
     document.head.appendChild(style);
-    document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="nordicInfo"><section class="nordic-info-card"><button type="button" id="nordicInfoClose">Close</button><div id="nordicInfoBody"></div></section></div>');
+    document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="nordicInfo"><section class="nordic-info-card"><button type="button" id="nordicInfoClose">Lukk</button><div id="nordicInfoBody"></div></section></div>');
     /* Legal links, seller identity and address are rendered statically in the footer (see /kjopsvilkar etc.). */
     const footer = document.querySelector("footer") || document.body;
     footer.insertAdjacentHTML("beforeend", '<div class="nordic-info-links"><button type="button" data-info="orders">Ordrestatus / Order status</button></div>');
@@ -90,7 +90,7 @@
     tools.id = "nordicCatalogTools";
     tools.setAttribute("role", "search");
     tools.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 20px";
-    tools.innerHTML = '<input id="nordicProductSearch" type="search" autocomplete="off" aria-label="Search products" placeholder="Search products" style="flex:1;min-width:210px;padding:12px;border:1px solid #94a3b8;border-radius:8px"><select id="nordicProductSort" aria-label="Sort products" style="padding:12px;border:1px solid #94a3b8;border-radius:8px"><option value="featured">Featured</option><option value="price-asc">Price: low to high</option><option value="price-desc">Price: high to low</option><option value="name">Name</option></select><span id="nordicResultCount" aria-live="polite" style="align-self:center;font-size:13px;opacity:.75"></span>';
+    tools.innerHTML = '<input id="nordicProductSearch" type="search" autocomplete="off" aria-label="Søk i produktene" placeholder="Søk i produktene" style="flex:1;min-width:210px;padding:12px;border:1px solid #94a3b8;border-radius:8px"><select id="nordicProductSort" aria-label="Sorter produktene" style="padding:12px;border:1px solid #94a3b8;border-radius:8px"><option value="featured">Anbefalt</option><option value="price-asc">Pris: lav til høy</option><option value="price-desc">Pris: høy til lav</option><option value="name">Navn</option></select><span id="nordicResultCount" aria-live="polite" style="align-self:center;font-size:13px;opacity:.75"></span>';
     grid.parentNode.insertBefore(tools, grid);
     const search = document.getElementById("nordicProductSearch");
     const count = document.getElementById("nordicResultCount");
@@ -102,7 +102,7 @@
         card.style.display = show ? "" : "none";
         if (show) visible++;
       });
-      count.textContent = visible + " products";
+      count.textContent = visible + " produkter";
     };
     search.addEventListener("input", applySearch);
     document.getElementById("nordicProductSort").addEventListener("change", event => {
@@ -150,7 +150,7 @@
     const body = document.getElementById("nordicInfoBody");
     if (type === "orders") {
       const orders = read(ORDER_KEY, []);
-      body.innerHTML = '<h2>Recent checkout attempts</h2>' + (orders.length ? orders.map(order => '<p><strong>'+esc(order.id)+'</strong><br>'+esc(order.date)+' · '+esc(order.market)+' · '+order.items.length+' item(s)<br><span>Status: '+esc(order.status || "checkout-created")+'</span></p>').join("") : '<p>No recent checkout attempts saved on this device.</p>');
+      body.innerHTML = '<h2>Ordrestatus</h2>' + (orders.length ? orders.map(order => '<p><strong>'+esc(order.id)+'</strong><br>'+esc(order.date)+' · '+esc(order.market)+' · '+order.items.length+' vare(r)<br><span>Status: '+esc(order.status || "checkout-created")+'</span></p>').join("") : '<p>Ingen bestillinger er lagret på denne enheten. Spørsmål om en ordre? Skriv til '+esc(CONTACT_EMAILS.orders)+'.</p>');
     } else body.innerHTML = pages[type] || pages.terms;
     modal.classList.add("open");
   }
@@ -160,7 +160,7 @@
   function enhanceCheckout() {
     let form = document.getElementById("checkoutForm");
     if (!form) {
-      document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="checkoutModal"><section class="nordic-info-card"><button type="button" id="checkoutClose">Close</button><h2>Delivery details</h2><form id="checkoutForm" class="formgrid"><input required name="name" placeholder="Full name"><input required type="email" name="email" placeholder="Email"><input required name="phone" placeholder="Phone"><input required name="city" placeholder="City"><input required class="full" name="address" placeholder="Address"><select required name="country" class="full"><option value="Norway">Norway</option><option value="Europe">Europe</option><option value="Peru">Peru</option></select><button class="checkout full" type="submit">CREATE SECURE ORDER DRAFT</button></form><div id="success" style="display:none"></div></section></div>');
+      document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="checkoutModal"><section class="nordic-info-card"><button type="button" id="checkoutClose">Lukk</button><h2>Leveringsopplysninger</h2><form id="checkoutForm" class="formgrid"><input required name="name" placeholder="Fullt navn"><input required type="email" name="email" placeholder="E-post"><input required name="phone" placeholder="Telefon"><input required name="city" placeholder="Sted"><input required class="full" name="address" placeholder="Adresse"><select required name="country" class="full"><option value="Norway">Norge</option><option value="Europe">Europa</option><option value="Peru">Peru</option></select><button class="checkout full" type="submit">CREATE SECURE ORDER DRAFT</button></form><div id="success" style="display:none"></div></section></div>');
       form = document.getElementById("checkoutForm");
       document.getElementById("checkoutClose").onclick = () => document.getElementById("checkoutModal").classList.remove("open");
     }
@@ -176,7 +176,7 @@
     if (form.dataset.enhanced) return;
     form.dataset.enhanced = "true";
     const button = form.querySelector('[type="submit"]');
-    button.textContent = "PAY SECURELY WITH STRIPE";
+    button.textContent = "BETAL SIKKERT MED STRIPE";
     const summary = '<div class="full notice nordic-precontract">Du sendes til Stripe Checkout for sikker betaling. Selger: '+BRAND+' (Martinez Lozano Internasjonal Handel, org.nr 935 407 095 MVA). Totalpris inkl. 25 % MVA og frakt (79 kr i Norge) vises før du betaler. Estimert levering 5–20 virkedager. 14 dagers angrerett – du betaler selv returfrakten.<br><span lang="en">You will be redirected to Stripe Checkout. The total incl. VAT and shipping is shown before you pay. 14-day right of withdrawal.</span></div>';
     const oldNotice = form.querySelector(".notice");
     if (oldNotice) oldNotice.outerHTML = summary; else button.insertAdjacentHTML("beforebegin", summary);
@@ -199,7 +199,7 @@
       orders.unshift(order);
       write(ORDER_KEY, orders.slice(0, 20));
       button.disabled = true;
-      button.textContent = "OPENING STRIPE…";
+      button.textContent = "ÅPNER STRIPE…";
       try {
         const response = await fetch("/api/create-checkout-session", {
           method:"POST",
@@ -209,12 +209,12 @@
           })
         });
         const checkout = await response.json();
-        if (!response.ok || !checkout.url) throw new Error(checkout.error || "Payment unavailable");
+        if (!response.ok || !checkout.url) throw new Error(checkout.error || "Betaling er ikke tilgjengelig akkurat nå");
         window.location.assign(checkout.url);
       } catch (error) {
         button.disabled = false;
-        button.textContent = "TRY PAYMENT AGAIN";
-        alert((error && error.message ? error.message : "Stripe Checkout is temporarily unavailable") + ". Please contact " + CONTACT_EMAILS.orders + ".");
+        button.textContent = "PRØV Å BETALE IGJEN";
+        alert((error && error.message ? error.message : "Stripe Checkout er midlertidig utilgjengelig") + ". Kontakt " + CONTACT_EMAILS.orders + ".");
         return;
       }
     };
