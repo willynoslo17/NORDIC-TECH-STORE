@@ -12,6 +12,20 @@ const PAGES_PER_KEYWORD = 2;
 const MAX_KEYWORDS = 3;
 const CJ_GAP_MS = 1100;
 const CJ_LIVE_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-products";
+/**
+ * All NORDIC-* stores share one CJ account (QPS = 1 req/s across stores). Without caching, every page view
+ * re-authenticated and ran 5–8 live CJ calls, so concurrent visitors on different stores got
+ * "Too Many Requests, QPS limit is 1 time/1second" → 502. The curated set is now cached (isolate memory +
+ * Cloudflare Cache API) and the CJ access token is reused, so CJ is only called when the cache is older
+ * than CACHE_FRESH_MS. A stale copy is served if a refresh fails. Price quotes are signed per response.
+ */
+const CACHE_FRESH_MS = 30 * 60 * 1000;
+const CACHE_KEEP_SECONDS = 12 * 3600;
+const EMPTY_RETRY_MS = 30 * 60 * 1000; // genuinely empty after filtering (not a QPS failure)
+type CachedCatalog = { at: number; payload: any | null };
+const memoryCatalog = new Map<string, CachedCatalog>();
+const inflight = new Map<string, Promise<CachedCatalog | null>>();
+let tokenCache: { key: string; token: string; until: number } | null = null;
 
 type StoreProfile = {
   sector: string;
@@ -88,17 +102,72 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function getToken(apiKey: string) {
-  const response = await fetch(BASE + "/authentication/getAccessToken", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ apiKey }),
-  });
-  const result: any = await response.json();
-  if (!response.ok || !result?.data?.accessToken) {
-    throw new Error(result?.message || "CJ authentication failed");
+async function getToken(apiKey: string, forceNew = false): Promise<{ token: string; fresh: boolean }> {
+  if (!forceNew && tokenCache && tokenCache.key === apiKey && tokenCache.until > Date.now()) {
+    return { token: tokenCache.token, fresh: false };
   }
-  return result.data.accessToken as string;
+  for (let attempt = 1; ; attempt++) {
+    const response = await fetch(BASE + "/authentication/getAccessToken", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ apiKey }),
+    });
+    const result: any = await response.json().catch(() => ({}));
+    const qps = response.status === 429 || /too many requests|qps/i.test(String(result?.message || ""));
+    if (qps && attempt < 4) {
+      await sleep(CJ_GAP_MS * attempt);
+      continue;
+    }
+    if (!response.ok || !result?.data?.accessToken) {
+      throw new Error(result?.message || "CJ authentication failed");
+    }
+    const token = String(result.data.accessToken);
+    const expiry = Date.parse(String(result.data.accessTokenExpiryDate || ""));
+    const until = Number.isFinite(expiry)
+      ? Math.min(expiry - 3600_000, Date.now() + 12 * 3600_000)
+      : Date.now() + 3600_000;
+    tokenCache = { key: apiKey, token, until };
+    return { token, fresh: true };
+  }
+}
+
+function catalogCacheUrl(origin: string, query: string, page: number) {
+  return `${origin}/__cache/cj-products/v1?sector=${encodeURIComponent(PROFILE.sector)}&q=${encodeURIComponent(query)}&page=${page}`;
+}
+
+async function readCatalog(key: string): Promise<CachedCatalog | null> {
+  const mem = memoryCatalog.get(key);
+  if (mem) return mem;
+  try {
+    const cache = (globalThis as any).caches?.default;
+    const hit = cache ? await cache.match(key) : null;
+    if (!hit) return null;
+    const value = (await hit.json()) as CachedCatalog;
+    if (!value || typeof value.at !== "number") return null;
+    memoryCatalog.set(key, value);
+    return value;
+  } catch {
+    return null;
+  }
+}
+
+async function writeCatalog(key: string, payload: any | null): Promise<CachedCatalog> {
+  const value: CachedCatalog = { at: Date.now(), payload };
+  memoryCatalog.set(key, value);
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (cache) {
+      await cache.put(
+        key,
+        new Response(JSON.stringify(value), {
+          headers: { "content-type": "application/json", "cache-control": `public, max-age=${CACHE_KEEP_SECONDS}` },
+        })
+      );
+    }
+  } catch {
+    /* best effort */
+  }
+  return value;
 }
 
 function parsePrice(value: unknown): number {
@@ -204,11 +273,14 @@ async function collectWinners(token: string, primaryQuery: string) {
   let totalRecords = 0;
   const byId = new Map<string, any>();
   let paced = false;
+  let fetched = 0;
 
   async function pacedFetch(keyword: string, page: number) {
     if (paced) await sleep(CJ_GAP_MS);
     paced = true;
-    return fetchPage(token, keyword, page);
+    const data = await fetchPage(token, keyword, page);
+    fetched++;
+    return data;
   }
 
   // Primary query first — guarantee a non-empty boutique set even if later keywords fail.
@@ -248,6 +320,7 @@ async function collectWinners(token: string, primaryQuery: string) {
     try {
       await sleep(CJ_GAP_MS);
       const data = await fetchPage(token, primaryQuery, 1);
+      fetched++;
       totalRecords = Number(data?.totalRecords) || totalRecords;
       ingest(byId, data);
     } catch (_) {}
@@ -255,7 +328,7 @@ async function collectWinners(token: string, primaryQuery: string) {
 
   const ranked = Array.from(byId.values()).sort((a, b) => score(b) - score(a));
   const winners = ranked.slice(0, STOREFRONT_CAP);
-  return { winners, totalRecords: totalRecords || winners.length, scanned: byId.size };
+  return { winners, totalRecords: totalRecords || winners.length, scanned: byId.size, fetched };
 }
 
 function curatedPayload(
@@ -355,34 +428,62 @@ export async function onRequestGet(context: any) {
     }
   }
 
-  try {
-    const token = await getToken(apiKey);
-    await sleep(CJ_GAP_MS); // QPS: auth counts as a request
-    const { winners, totalRecords, scanned } = await collectWinners(token, query);
-    if (!winners.length) {
-      // Never advertise empty curated boutique — surface real failure for retry/failover.
-      if (PROFILE.enableFallback) {
-        try {
-          return await viaFallback(query, page, headers, context.env);
-        } catch (_) {}
-      }
-      return Response.json(
-        { error: "CJ curated catalog empty after QPS-paced fetch", ok: false, supplier: "cj", query },
-        { status: 502, headers }
-      );
-    }
-    const payload = curatedPayload(PROFILE.sector, query, winners, totalRecords, scanned, page);
-    payload.products = await withQuotes(context.env, "cj", payload.products, cjIds);
-    return Response.json(payload, { headers });
-  } catch (error) {
-    if (PROFILE.enableFallback) {
-      try {
-        return await viaFallback(query, page, headers, context.env);
-      } catch (_) {}
-    }
-    return Response.json(
-      { error: error instanceof Error ? error.message : "CJ request failed" },
-      { status: 502, headers }
+  const emptyResponse = (state: string) =>
+    Response.json(
+      { error: "CJ curated catalog empty after QPS-paced fetch", ok: false, supplier: "cj", query },
+      { status: 502, headers: { ...headers, "x-catalog-cache": state } }
     );
+  const serve = async (payload: any, state: string) => {
+    const body = { ...payload, products: await withQuotes(context.env, "cj", payload.products, cjIds) };
+    return Response.json(body, { headers: { ...headers, "x-catalog-cache": state } });
+  };
+
+  const cacheKey = catalogCacheUrl(url.origin, query, page);
+  const cached = await readCatalog(cacheKey);
+  const age = cached ? Date.now() - cached.at : Number.POSITIVE_INFINITY;
+  if (cached?.payload && age < CACHE_FRESH_MS) return serve(cached.payload, "hit");
+  if (cached && !cached.payload && age < EMPTY_RETRY_MS) return emptyResponse("hit-empty");
+
+  let refreshError: unknown = null;
+  let refresh = inflight.get(cacheKey);
+  if (!refresh) {
+    refresh = (async () => {
+      let auth = await getToken(apiKey);
+      if (auth.fresh) await sleep(CJ_GAP_MS); // QPS: auth counts as a request
+      let result = await collectWinners(auth.token, query);
+      if (!result.fetched && !auth.fresh) {
+        // Reused token may have been replaced/expired: retry once with a new one.
+        auth = await getToken(apiKey, true);
+        await sleep(CJ_GAP_MS);
+        result = await collectWinners(auth.token, query);
+      }
+      if (result.winners.length) {
+        return writeCatalog(cacheKey, curatedPayload(PROFILE.sector, query, result.winners, result.totalRecords, result.scanned, page));
+      }
+      // CJ answered but every listing was filtered out: remember briefly instead of re-querying on each view.
+      if (result.fetched && !cached?.payload) return writeCatalog(cacheKey, null);
+      return null;
+    })();
+    inflight.set(cacheKey, refresh);
+    refresh.finally(() => inflight.delete(cacheKey)).catch(() => {});
   }
+  let fresh: CachedCatalog | null = null;
+  try {
+    fresh = await refresh;
+  } catch (error) {
+    refreshError = error;
+  }
+  if (fresh?.payload) return serve(fresh.payload, "miss");
+  if (cached?.payload) return serve(cached.payload, "stale");
+
+  if (PROFILE.enableFallback) {
+    try {
+      return await viaFallback(query, page, headers, context.env);
+    } catch (_) {}
+  }
+  if (!refreshError) return emptyResponse(fresh ? "miss-empty" : "miss");
+  return Response.json(
+    { error: refreshError instanceof Error ? refreshError.message : "CJ request failed" },
+    { status: 502, headers }
+  );
 }
