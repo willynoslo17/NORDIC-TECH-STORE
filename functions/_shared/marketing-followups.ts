@@ -31,6 +31,13 @@ const MAX_CHECKS = 10;
 /** Addresses already handled by this isolate (saves Brevo calls on the next hourly runs; Brevo's log stays the real dedup). */
 const handled = new Set<string>();
 
+/** Dry-run probe only (never sends): look at everything since FOLLOWUPS_SINCE instead of what is due now. */
+function windowFor(afterMs: number, dry: boolean, probe: boolean): [number, number] {
+  if (dry && probe) return [FOLLOWUPS_SINCE, Date.now()];
+  const to = Date.now() - afterMs;
+  return [Math.max(FOLLOWUPS_SINCE, to - CATCH_UP_MS), to];
+}
+
 export type FollowupResult = { job: string; dry: boolean; candidates: number; checked: number; sent: number; skipped: Record<string, number>; errors: number };
 const day = (ms: number) => new Date(ms).toISOString().slice(0, 10);
 const bump = (r: FollowupResult, why: string) => { r.skipped[why] = (r.skipped[why] || 0) + 1; };
@@ -58,13 +65,12 @@ async function receivedRecently(env: MktEnv, templateId: number, email: string):
 }
 
 /** welcome-4: 7 days after welcome-1. */
-export async function runWelcome4(env: MktEnv, dry: boolean): Promise<FollowupResult> {
+export async function runWelcome4(env: MktEnv, dry: boolean, probe = false): Promise<FollowupResult> {
   const r: FollowupResult = { job: "welcome-4", dry, candidates: 0, checked: 0, sent: 0, skipped: {}, errors: 0 };
   const setup = await ensureSetup(env);
   const w1 = setup.ids["welcome-1"], w4 = setup.ids["welcome-4"];
   if (!w1 || !w4) { bump(r, "template_missing"); return r; }
-  const to = Date.now() - WELCOME_4_AFTER_MS;
-  const from = Math.max(FOLLOWUPS_SINCE, to - CATCH_UP_MS);
+  const [from, to] = windowFor(WELCOME_4_AFTER_MS, dry, probe);
   if (from >= to) return r;
   const emails = await receivedBetween(env, w1, from, to);
   r.candidates = emails.length;
@@ -112,14 +118,13 @@ async function paidSessions(env: MktEnv, fromMs: number, toMs: number): Promise<
 const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
 
 /** purchase-3 (newsletter copy): 21 days after a paid order of this store. */
-export async function runPurchase3(env: MktEnv, dry: boolean): Promise<FollowupResult> {
+export async function runPurchase3(env: MktEnv, dry: boolean, probe = false): Promise<FollowupResult> {
   const r: FollowupResult = { job: "purchase-3", dry, candidates: 0, checked: 0, sent: 0, skipped: {}, errors: 0 };
   if (!env.STRIPE_SECRET_KEY) { bump(r, "stripe_not_configured"); return r; }
   const setup = await ensureSetup(env);
   const p3 = setup.ids["purchase-3-nl"];
   if (!p3) { bump(r, "template_missing"); return r; }
-  const to = Date.now() - PURCHASE_3_AFTER_MS;
-  const from = Math.max(FOLLOWUPS_SINCE, to - CATCH_UP_MS);
+  const [from, to] = windowFor(PURCHASE_3_AFTER_MS, dry, probe);
   if (from >= to) return r;
   const sessions = await paidSessions(env, from, to);
   r.candidates = sessions.length;

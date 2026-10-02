@@ -2,7 +2,8 @@
  * /api/marketing-cron - due follow-up e-mails (see ../_shared/marketing-followups.ts).
  *
  * GET                                   -> schedule only (no Brevo/Stripe calls).
- * POST ?job=welcome-4|purchase-3[&dry=1] with "authorization: Bearer <cron token>" -> runs one job; dry=1 only counts.
+ * POST ?job=welcome-4|purchase-3[&dry=1[&probe=1]] with "authorization: Bearer <cron token>" -> runs one job; dry=1 only
+ *   counts (nothing is sent); probe=1 (dry only) checks everything since the release instead of what is due now.
  * Called hourly by the account's "nordic-mkt-followups" cron Worker. Only the token's SHA-256 is stored here.
  * The reply holds counts only (no addresses).
  */
@@ -40,11 +41,12 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
   const url = new URL(request.url);
   const job = url.searchParams.get("job") || "";
   const dry = url.searchParams.get("dry") === "1";
+  const probe = dry && url.searchParams.get("probe") === "1";
   if (job !== "welcome-4" && job !== "purchase-3") return reply({ ok: false, error: "Unknown job" }, 400);
   if (running) return reply({ ok: true, job, busy: true });
   running = true;
   try {
-    const result = job === "welcome-4" ? await runWelcome4(env, dry) : await runPurchase3(env, dry);
+    const result = job === "welcome-4" ? await runWelcome4(env, dry, probe) : await runPurchase3(env, dry, probe);
     return reply({ ok: true, store: STORE.slug, ...result });
   } catch (error) {
     return reply({ ok: false, store: STORE.slug, job, error: String((error as Error)?.message || "failed").slice(0, 120) }, 502);
