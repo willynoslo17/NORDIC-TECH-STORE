@@ -64,9 +64,12 @@
     return productById(id);
   }
 
+  /* Saved cart lines whose product has not loaded yet (background suppliers such as Gelato). */
+  let pendingCart = {};
+
   function saveCartSoon() {
     setTimeout(() => {
-      write(CART_KEY, cartObject());
+      write(CART_KEY, { ...pendingCart, ...cartObject() });
     }, 0);
   }
 
@@ -224,13 +227,32 @@
     const saved = read(CART_KEY, {});
     /* Products now appear before this runs, so keep anything already added in this visit. */
     const valid = { ...cartObject() };
+    pendingCart = {};
     Object.entries(saved).forEach(([id, quantity]) => {
-      if (valid[id] == null && productById(id) && Number(quantity) > 0) valid[id] = Math.min(99, Number(quantity));
+      if (valid[id] != null || !(Number(quantity) > 0)) return;
+      if (productById(id)) valid[id] = Math.min(99, Number(quantity));
+      else pendingCart[id] = Math.min(99, Number(quantity));
     });
     setCartObject(valid);
     redrawCart();
-    write(CART_KEY, valid);
+    write(CART_KEY, { ...pendingCart, ...valid });
   }
+
+  /* A background supplier answered: put saved lines for its products back into the cart. */
+  function restorePending() {
+    if (!started || !Object.keys(pendingCart).length) return;
+    const current = { ...cartObject() };
+    let changed = false;
+    Object.keys(pendingCart).forEach(id => {
+      if (!productById(id)) return;
+      if (current[id] == null) current[id] = pendingCart[id];
+      delete pendingCart[id];
+      changed = true;
+    });
+    if (changed) { setCartObject(current); redrawCart(); }
+  }
+  window.addEventListener("nordic:catalog-updated", restorePending);
+  window.addEventListener("nordic:catalog-complete", () => { restorePending(); pendingCart = {}; if (started) saveCartSoon(); });
 
   function init() {
     if (started) return;

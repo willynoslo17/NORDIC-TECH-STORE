@@ -42,6 +42,9 @@
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
   /** A slow supplier endpoint never blocks the grid: after this many ms its local fallback is used instead. */
   const SOURCE_TIMEOUT_MS = 8000;
+  /** Gelato (live prices from the Gelato API) loads in the background and may take longer; it never delays readiness. */
+  const BACKGROUND_TIMEOUT_MS = 30000;
+  const BACKGROUND_SOURCES = ["gelato"];
   const SOURCE_ORDER = ["cj", "printify", "gelato", "printful"];
   /** Customer-facing (Norwegian) names for supplier category values. Per-store overrides: config.catMap. */
   const CAT_NB = {
@@ -102,20 +105,18 @@
     return parts.length ? [Math.min(...parts), Math.max(...parts)] : [0, 0];
   }
 
-  /** Supplier cost (USD) of the variant actually sold, or 0 if unknown (see functions/_shared/pricing.ts). */
+  /** Supplier cost (USD) used as price basis (same as functions/_shared/pricing.ts): CJ = highest variant cost. */
   function costUsd(provider, item) {
     const p = String(provider || (item && item.provider) || "").toLowerCase();
     if (p === "cj") {
       const listed = priceRange(item.sellPrice != null ? item.sellPrice : item.supplierPriceUsd);
-      const max = item.supplierPriceMaxUsd != null ? num(item.supplierPriceMaxUsd) : (listed[1] > listed[0] ? listed[1] : 0);
-      const min = listed[0];
-      if (!min || !max || max < min) return 0;
-      return retailNokFromCost(min) === retailNokFromCost(max) ? max : 0;
+      return Math.max(num(item.supplierPriceMaxUsd), listed[1], listed[0]);
     }
     if (p === "printify") {
       const linked = /^[0-9a-f]{24}$/.test(String(item.printifyProductId || "")) && /^\d+$/.test(String(item.printifyVariantId || ""));
       return linked ? num(item.supplierPriceUsd) : 0;
     }
+    if (p === "gelato" || p === "printful") return num(item.supplierPriceUsd);
     return 0;
   }
 
@@ -181,9 +182,9 @@
     }
   }
 
-  async function loadApiProducts(endpoint) {
+  async function loadApiProducts(endpoint, ms) {
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), SOURCE_TIMEOUT_MS);
+    const timer = setTimeout(() => timeout.abort(), ms || SOURCE_TIMEOUT_MS);
     try {
       const response = await fetch(endpoint, { signal: timeout.signal, cache: "no-store" });
       if (!response.ok) return [];
@@ -198,7 +199,7 @@
     }
   }
 
-  /* Items whose name matches config.cjExclude are hidden unless CJ reports a CE certification. */
+  /* Items whose name matches config.cjExclude are hidden unless CJ reports a CE certification (store setting). */
   function cjAllowed(config) {
     if (!config || !config.cjExclude) return () => true;
     const rx = new RegExp(config.cjExclude, "i");
@@ -253,7 +254,7 @@
 
   async function loadPodCatalog(provider, category, query) {
     const q = encodeURIComponent(podQuery(query || ""));
-    const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q);
+    const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q, BACKGROUND_SOURCES.includes(provider) ? BACKGROUND_TIMEOUT_MS : SOURCE_TIMEOUT_MS);
     if (apiItems.length) {
       return apiItems.map((item, index) => curated({ ...item, provider }, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
     }
@@ -283,36 +284,47 @@
     return list;
   }
 
+  /* Printful/Gelato categories are product-type names ("All-Over Print Tote Bag"): group them by keyword. */
+  const POD_CAT_RULES = [
+    [/\b(mugs?|cups?|tumblers?|bottles?)\b/i, "Krus"],
+    [/\b(posters?|prints?|canvas|framed|wall art)\b/i, "Plakater"],
+    [/\b(totes?|bags?|backpacks?|fanny|pouch)\b/i, "Vesker"],
+    [/\b(t-?shirts?|tees?|hoodies?|sweatshirts?|crewnecks?|shirts?|tank|leggings|joggers|shorts|dress|onesie|bodysuit|apparel|socks)\b/i, "Klær"],
+    [/\b(phone|iphone|samsung|case)\b/i, "Mobildeksler"],
+    [/\b(notebooks?|journals?|stickers?|cards?|stationery)\b/i, "Papirvarer"],
+    [/\b(hats?|caps?|beanies?|bucket)\b/i, "Tilbehør"],
+    [/\b(pillows?|blankets?|towels?|mats?|aprons?|candles?|ornaments?)\b/i, "Hjem"]
+  ];
+  function podCategory(item) {
+    const text = String(item.cat || "") + " " + String(item.name || "");
+    const hit = POD_CAT_RULES.find(rule => rule[0].test(text));
+    return hit ? hit[1] : "Tilbehør";
+  }
+
   function catLabel(item, provider, cfg) {
     const raw = String(item.cat || "").trim();
     const key = raw.toLowerCase();
     if (cfg.catMap && cfg.catMap[key]) return cfg.catMap[key];
     /* CJ "category" is only the store sector / search word (e.g. "beauty"): use the store's own category name. */
     if (provider === "cj" || !key || key === String(cfg.query || "").toLowerCase() || key === podQuery(cfg.query)) return cfg.category || raw;
-    return CAT_NB[key] || raw;
+    if (CAT_NB[key]) return CAT_NB[key];
+    if (provider === "printful" || provider === "gelato") return podCategory(item);
+    return raw;
   }
 
-  /* Storefront rules (per store via config): only items with an image, no blank Printful catalog items
-     (no design files), no names matching config.exclude (off-topic / store-logo merch). */
-  function storefrontItem(cfg) {
-    const rx = cfg.exclude ? new RegExp(cfg.exclude, "i") : null;
-    return item => Boolean(item && item.image) &&
-      !(item.provider === "printful" && item.printfulSource !== "store") &&
-      !(rx && rx.test(String(item.name || "")));
+  /* Storefront rule (owner, 2026-10-02): every product that has an image is shown. */
+  function storefrontItem() {
+    return item => Boolean(item && item.image);
   }
 
-  function nameKey(name) {
-    return String(name || "").toLowerCase().replace(/\s+/g, " ").trim();
-  }
-
-  /** One grid with every supplier (fixed order), identical names shown once (first one wins). */
+  /** One grid with every supplier (fixed order); only the very same product (supplier + id) is listed once. */
   function storefrontList() {
     const seen = new Set();
     const out = [];
     SOURCE_ORDER.forEach(key => {
       (window.nordicCatalogs[key] || []).forEach(item => {
-        const k = nameKey(item.name);
-        if (!k || seen.has(k)) return;
+        const k = key + "|" + String(item.externalId || item.id);
+        if (seen.has(k)) return;
         seen.add(k);
         out.push(item);
       });
@@ -348,6 +360,7 @@
     const sort = document.getElementById("nordicProductSort");
     if (sort && sort.value && sort.value !== "featured") sort.dispatchEvent(new Event("change"));
     setStatus("all · " + list.length, list.length > 0);
+    try { window.dispatchEvent(new Event("nordic:catalog-updated")); } catch (_) {}
     return list;
   }
 
@@ -357,7 +370,7 @@
     const cfg = config || {};
     const category = cfg.category || "General";
     const query = cfg.query || "";
-    const keep = storefrontItem(cfg);
+    const keep = storefrontItem();
     const loaders = {
       cj: cfg.cj === false ? Promise.resolve([]) : loadCjSelected(cfg), // store opted out of CJ: no request
       printify: loadPodCatalog("printify", category, query),
@@ -365,19 +378,27 @@
       printful: loadPodCatalog("printful", category, query)
     };
     window.nordicCatalogs = { cj: [], printify: [], gelato: [], printful: [] };
-    /* Render each supplier as soon as it answers (or falls back after SOURCE_TIMEOUT_MS). */
-    await Promise.allSettled(SOURCE_ORDER.map(key => loaders[key]
+    /* Render each supplier as soon as it answers (or falls back after its timeout). */
+    const settle = key => loaders[key]
       .catch(() => [])
       .then(list => {
         window.nordicCatalogs[key] = (Array.isArray(list) ? list : [])
           .map(item => { const cat = catLabel(item, key, cfg); return { ...item, cat, tag: cat }; })
           .filter(keep);
         applyStorefront();
-      })));
+      });
+    const background = SOURCE_ORDER.filter(key => BACKGROUND_SOURCES.includes(key)).map(settle);
+    /* Search, saved cart and checkout start once the fast sources are in; background sources are added later. */
+    await Promise.allSettled(SOURCE_ORDER.filter(key => !BACKGROUND_SOURCES.includes(key)).map(settle));
     const active = applyStorefront();
     window.nordicCatalogReady = true;
     try { window.dispatchEvent(new Event("nordic:catalog-ready")); } catch (_) {}
     if (!active.length) setStatus("local catalog, suppliers pending", false);
+    Promise.allSettled(background).then(() => {
+      applyStorefront();
+      window.nordicCatalogComplete = true;
+      try { window.dispatchEvent(new Event("nordic:catalog-complete")); } catch (_) {}
+    });
     return active;
   };
 
