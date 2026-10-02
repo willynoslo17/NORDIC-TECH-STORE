@@ -71,6 +71,11 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
   if (!EMAIL.test(to)) return reply({ ok: false, error: "Invalid email" }, 400);
   if (body.action === "scheduled") {
     const out: Record<string, unknown> = {};
+    for (const id of (Array.isArray(body?.ids) ? body.ids.map(String).slice(0, 10) : [])) {
+      try { out[id] = await brevo(env, body?.cancel ? "DELETE" : "GET", body?.cancel ? `/smtp/email/${encodeURIComponent(id)}` : `/smtp/emailStatus/${encodeURIComponent(id)}`) ?? "deleted"; }
+      catch (error) { out[id] = { error: (error as Error).message, status: (error as BrevoError).status }; }
+    }
+    if (Array.isArray(body?.ids)) return reply({ ok: true, ids: out });
     for (const day of lastDays(4)) for (const key of ["welcome-2", "welcome-3", "cart-2", "cart-3"]) {
       try {
         const s = await brevo(env, "GET", `/smtp/emailStatus/${await batchId(env, to, key, day)}`);
