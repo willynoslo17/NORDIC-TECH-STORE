@@ -86,6 +86,17 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
     unsubscribe_url: await unsubscribeUrl(env, to, utcDay()),
   };
   const results: Record<string, unknown> = {};
+  if (Number(body?.scheduleInMinutes) > 0) {
+    // Scheduling check: one scheduled copy with a deterministic batchId, its Brevo status, optional cancellation.
+    const key = keys[0];
+    const batch = await batchId(env, to, key, "test");
+    const at = Date.now() + Math.min(Number(body.scheduleInMinutes), 4000) * 60 * 1000;
+    const step = async (name: string, fn: () => Promise<unknown>) => { try { results[name] = await fn(); } catch (error) { results[name] = { error: (error as Error).message, code: (error as BrevoError).code }; } };
+    await step("schedule", () => sendTemplate(env, setup, key, to, params, { subjectPrefix: "[TEST] ", at, batch, idempotency: body?.idempotency ? `test-${batch}` : undefined }));
+    await step("status", () => brevo(env, "GET", `/smtp/emailStatus/${batch}`));
+    if (body?.cancel) { await step("cancel", () => brevo(env, "DELETE", `/smtp/email/${batch}`)); await step("statusAfter", () => brevo(env, "GET", `/smtp/emailStatus/${batch}`)); }
+    return reply({ ok: true, batch, results });
+  }
   for (const key of keys.slice(0, 10)) {
     try { results[key] = await sendTemplate(env, setup, key, to, body?.noParams ? {} : params, { subjectPrefix: "[TEST] " }); }
     catch (error) { results[key] = { error: (error as Error).message }; }
