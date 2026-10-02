@@ -44,7 +44,8 @@ const INCLUDE = CFG.include ? new RegExp(CFG.include, "i") : null;
 const EXCLUDE = CFG.exclude ? new RegExp(CFG.exclude, "i") : null;
 const FRESH_MS = 6 * 3600 * 1000;
 const KEEP_SECONDS = 48 * 3600;
-const KEYWORDS_PER_REFRESH = 6;
+const KEYWORDS_PER_REFRESH = 3; // keeps one request well under the 50-subrequest limit (CJ retries included)
+const REFRESH_STUCK_MS = 60 * 1000; // a refresh cut off with its request never settles; allow a new one
 const CJ_GAP_MS = 1100;
 
 type Entry = { at: number; rows: any[] };
@@ -53,6 +54,7 @@ type Store = { entries: Record<string, Entry> };
 let memory: { at: number; value: Store } | null = null;
 const MEMORY_MS = 60 * 1000;
 let refreshing: Promise<void> | null = null;
+let refreshStarted = 0;
 let lastError = "";
 
 function sleep(ms: number) {
@@ -80,11 +82,10 @@ async function readStore(key: string, fresh = false): Promise<Store> {
   return value;
 }
 
-async function writeEntries(key: string, updates: Record<string, Entry>) {
-  if (!Object.keys(updates).length) return;
-  const current = await readStore(key, true); // merge with what other isolates wrote meanwhile
-  const value: Store = { entries: { ...current.entries, ...updates } };
-  memory = { at: Date.now(), value };
+async function writeEntry(key: string, keyword: string, entry: Entry) {
+  const base = memory?.value || { entries: {} };
+  const value: Store = { entries: { ...base.entries, [keyword]: entry } };
+  memory = { at: memory?.at || Date.now(), value };
   try {
     const cache = (globalThis as any).caches?.default;
     if (cache) {
@@ -101,7 +102,6 @@ async function refresh(deps: WinnerDeps, keywords: string[]) {
   let auth = await deps.getToken(deps.apiKey);
   if (auth.fresh) await sleep(CJ_GAP_MS);
   let renewed = auth.fresh;
-  const updates: Record<string, Entry> = {};
   for (let i = 0; i < keywords.length; i++) {
     if (i) await sleep(CJ_GAP_MS);
     const keyword = keywords[i];
@@ -127,9 +127,8 @@ async function refresh(deps: WinnerDeps, keywords: string[]) {
       .filter((item) => item && item.id && item.bigImage && deps.accept(item))
       .map((item, index) => ({ ...deps.toProduct(item, index, deps.sector), keyword }))
       .filter(eligible);
-    updates[keyword] = { at: Date.now(), rows };
+    await writeEntry(storeUrl(deps.origin, deps.sector), keyword, { at: Date.now(), rows });
   }
-  await writeEntries(storeUrl(deps.origin, deps.sector), updates);
 }
 
 function eligible(product: any): boolean {
@@ -158,7 +157,8 @@ export async function winnerRows(deps: WinnerDeps, mode: "grid" | "review", skip
       if (id && !byId.has(id)) byId.set(id, row);
     }
   }
-  if (stale.length && !refreshing) {
+  if (stale.length && (!refreshing || Date.now() - refreshStarted > REFRESH_STUCK_MS)) {
+    refreshStarted = Date.now();
     refreshing = refresh(deps, stale.slice(0, KEYWORDS_PER_REFRESH))
       .catch((error) => { lastError = String((error as any)?.message || error).slice(0, 160); })
       .finally(() => { refreshing = null; });
