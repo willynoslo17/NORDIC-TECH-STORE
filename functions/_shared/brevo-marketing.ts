@@ -8,8 +8,9 @@
  * - Only env.BREVO_API_KEY is used. It is never logged or returned. Tokens in links (welcome / unsubscribe) are
  *   AES-GCM sealed with a key derived from it, so links cannot be forged or read.
  * - Marketing e-mails (welcome, abandoned cart) go only to contacts that are in "<Store> nyhetsbrev" (double opt-in).
- * - Brevo can schedule transactional e-mails at most 72 h ahead; scheduled mails get a deterministic batchId so they
- *   can be cancelled (unsubscribe, completed purchase).
+ * - Brevo can schedule transactional e-mails at most 72 h ahead. Scheduled mails can only be cancelled by messageId, so
+ *   the later mails of a series are scheduled first and their messageIds travel inside the (sealed) unsubscribe link of
+ *   the earlier mails; for a completed purchase the pending cart reminders are looked up in the Cache API (best effort).
  */
 import { STORE } from "./store";
 import { MARKETING_TEMPLATES, MARKETING_VERSION } from "./marketing-templates";
@@ -71,21 +72,10 @@ export async function unseal<T = any>(env: MktEnv, purpose: string, token: strin
   } catch { return null; }
 }
 
-/** Deterministic UUIDv4-shaped id (Brevo batchId) for one scheduled e-mail. */
-export async function batchId(env: MktEnv, ...parts: string[]): Promise<string> {
-  const key = await crypto.subtle.importKey("raw", await derived(env, "batch"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const b = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(parts.join("|")))).slice(0, 16);
-  b[6] = (b[6] & 0x0f) | 0x40; b[8] = (b[8] & 0x3f) | 0x80;
-  const h = hex(b);
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
-
 export async function shortHash(env: MktEnv, ...parts: string[]): Promise<string> {
   return hex(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(`${STORE.slug}|${parts.join("|")}|${(await derived(env, "id")).join(",")}`))).slice(0, 32);
 }
 
-export const utcDay = (ms = Date.now()) => new Date(ms).toISOString().slice(0, 10).replace(/-/g, "");
-export const lastDays = (n: number) => Array.from({ length: n }, (_, i) => utcDay(Date.now() - i * 24 * HOUR));
 
 /* ---------------------------------------------------------------- list + templates (cached) */
 
@@ -179,18 +169,20 @@ export async function isSubscribed(env: MktEnv, setup: Setup, email: string): Pr
 }
 
 /** Was this template already sent to this address in the last 30 days (Brevo transactional log)? */
-export async function alreadySent(env: MktEnv, templateId: number, email: string): Promise<boolean> {
+export async function alreadySent(env: MktEnv, templateId: number, email: string, sinceDays = 0): Promise<boolean> {
   try {
-    const data = await brevo(env, "GET", `/smtp/emails?email=${encodeURIComponent(email)}&templateId=${templateId}&limit=1&sort=desc`);
+    const range = sinceDays > 0 ? `&startDate=${new Date(Date.now() - sinceDays * 24 * HOUR).toISOString().slice(0, 10)}&endDate=${new Date().toISOString().slice(0, 10)}` : "";
+    const data = await brevo(env, "GET", `/smtp/emails?email=${encodeURIComponent(email)}&templateId=${templateId}&limit=1&sort=desc${range}`);
     return Number(data?.count || 0) > 0 || (Array.isArray(data?.transactionalEmails) && data.transactionalEmails.length > 0);
   } catch { return false; }
 }
 
 /* ---------------------------------------------------------------- sending */
 
-export type SendOptions = { at?: number; batch?: string; idempotency?: string; subjectPrefix?: string };
+export type SendOptions = { at?: number; subjectPrefix?: string };
 
-export async function sendTemplate(env: MktEnv, setup: Setup, key: string, email: string, params: Record<string, string>, opts: SendOptions = {}) {
+/** Sends (or schedules, max ~72 h ahead) one template; returns Brevo's messageId. */
+export async function sendTemplate(env: MktEnv, setup: Setup, key: string, email: string, params: Record<string, string>, opts: SendOptions = {}): Promise<string> {
   const templateId = setup.ids[key];
   if (!templateId) throw new BrevoError(500, "template_missing", `Template ${key} is not ready`);
   const body: Record<string, unknown> = {
@@ -204,32 +196,48 @@ export async function sendTemplate(env: MktEnv, setup: Setup, key: string, email
     const t = MARKETING_TEMPLATES.find((x) => x.key === key);
     if (t) body.subject = `${opts.subjectPrefix}${t.subject}`;
   }
-  if (opts.idempotency) body.headers = { "Idempotency-Key": opts.idempotency };
-  if (opts.at && opts.at > Date.now() + 60 * 1000) {
-    body.scheduledAt = new Date(Math.min(opts.at, Date.now() + MAX_AHEAD_MS)).toISOString();
-    if (opts.batch) {
-      // Brevo keeps a client batchId only for batch sends (messageVersions); a single-version batch keeps the mail
-      // cancellable with DELETE /smtp/email/{batchId}.
-      body.batchId = opts.batch;
-      body.messageVersions = [{ to: body.to, params: body.params, ...(body.subject ? { subject: body.subject } : {}) }];
-      delete body.to;
-    }
-  }
+  if (opts.at && opts.at > Date.now() + 60 * 1000) body.scheduledAt = new Date(Math.min(opts.at, Date.now() + MAX_AHEAD_MS)).toISOString();
+  const data = await brevo(env, "POST", "/smtp/email", body);
+  return String(data?.messageId || (Array.isArray(data?.messageIds) ? data.messageIds[0] : "") || "");
+}
+
+export async function cancelScheduled(env: MktEnv, messageIds: string[]) {
+  const ids = [...new Set(messageIds.filter((id) => typeof id === "string" && /^<[^<>\s]{3,200}>$/.test(id)))].slice(0, 10);
+  await Promise.all(ids.map((id) => brevo(env, "DELETE", `/smtp/email/${encodeURIComponent(id)}`).catch(() => null)));
+}
+
+export async function unsubscribeUrl(env: MktEnv, email: string, pending: string[] = []) {
+  return `https://${STORE.domain}/api/newsletter-unsubscribe?k=${await seal(env, "unsub", { e: email, m: pending.filter(Boolean) })}`;
+}
+
+/** Best-effort cross-request memory (Cache API, per Cloudflare location). */
+const memKey = (name: string, id: string) => `https://${STORE.domain}/__cache/marketing/${name}?id=${id}`;
+async function memGet(name: string, id: string): Promise<any> {
+  try { const hit = await (globalThis as any).caches?.default?.match(memKey(name, id)); return hit ? await hit.json() : null; } catch { return null; }
+}
+async function memPut(name: string, id: string, value: unknown, seconds: number) {
+  try { await (globalThis as any).caches?.default?.put(memKey(name, id), new Response(JSON.stringify(value), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${seconds}` } })); } catch (_) {}
+}
+async function memDelete(name: string, id: string) {
+  try { await (globalThis as any).caches?.default?.delete(memKey(name, id)); } catch (_) {}
+}
+
+/**
+ * Sends a series: entries are [key, sendAt]. The last mails are scheduled first so that every mail's unsubscribe link
+ * carries the messageIds of the mails still pending after it. On any error the mails already scheduled are cancelled.
+ */
+async function sendSeries(env: MktEnv, setup: Setup, email: string, series: Array<[string, number]>, params: Record<string, string>) {
+  const pending: string[] = [];
   try {
-    return await brevo(env, "POST", "/smtp/email", body);
+    for (const [key, at] of [...series].reverse()) {
+      const id = await sendTemplate(env, setup, key, email, { ...params, unsubscribe_url: await unsubscribeUrl(env, email, pending) }, { at });
+      if (at > Date.now() + 60 * 1000 && id) pending.unshift(id);
+    }
+    return pending;
   } catch (error) {
-    // Same Idempotency-Key / batchId already used: the mail was already sent or scheduled.
-    if (error instanceof BrevoError && /already processed|duplicate/i.test(`${error.code} ${error.message}`)) return { duplicate: true };
+    await cancelScheduled(env, pending);
     throw error;
   }
-}
-
-export async function cancelScheduled(env: MktEnv, ids: string[]) {
-  await Promise.all([...new Set(ids)].map((id) => brevo(env, "DELETE", `/smtp/email/${id}`).catch(() => null)));
-}
-
-export async function unsubscribeUrl(env: MktEnv, email: string, day: string) {
-  return `https://${STORE.domain}/api/newsletter-unsubscribe?k=${await seal(env, "unsub", { e: email, d: day })}`;
 }
 
 /** Welcome series after a confirmed double opt-in: 1 now, 2 after 24 h, 3 after ~72 h (Brevo limit). 4 needs a Brevo automation. */
@@ -239,59 +247,64 @@ export const CART_SCHEDULE: Array<[string, number]> = [["cart-1", 1 * HOUR], ["c
 
 export async function startWelcome(env: MktEnv, email: string) {
   const setup = await ensureSetup(env);
+  const id = await shortHash(env, email);
+  if (await memGet("welcome", id)) return { sent: false, reason: "already_sent" };
   if (!(await isSubscribed(env, setup, email))) return { sent: false, reason: "not_subscribed" };
   if (await alreadySent(env, setup.ids["welcome-1"], email)) return { sent: false, reason: "already_sent" };
-  const day = utcDay();
-  const params = { unsubscribe_url: await unsubscribeUrl(env, email, day) };
+  await memPut("welcome", id, { at: Date.now() }, 7 * 24 * 3600);
   const now = Date.now();
-  for (const [key, delay] of WELCOME_SCHEDULE) {
-    await sendTemplate(env, setup, key, email, params, {
-      at: delay ? now + delay : undefined,
-      batch: await batchId(env, email, key, day),
-      idempotency: await shortHash(env, email, key, day),
-    });
+  try {
+    await sendSeries(env, setup, email, WELCOME_SCHEDULE.map(([key, delay]) => [key, now + delay] as [string, number]), {});
+  } catch (error) {
+    await memDelete("welcome", id);
+    throw error;
   }
   return { sent: true };
 }
 
-export async function cancelSeries(env: MktEnv, email: string, keys: string[], days: string[]) {
-  const ids: string[] = [];
-  for (const day of days) for (const key of keys) ids.push(await batchId(env, email, key, day));
-  await cancelScheduled(env, ids);
+/** Abandoned cart (marketing): only for confirmed newsletter subscribers of this store; one series per 3 days. */
+export async function startAbandonedCart(env: MktEnv, email: string, createdMs: number, productNames: string[]) {
+  const setup = await ensureSetup(env);
+  const id = await shortHash(env, email);
+  if (await memGet("cart-lock", id)) return { sent: false, reason: "series_running" };
+  if (!(await isSubscribed(env, setup, email))) return { sent: false, reason: "no_newsletter_consent" };
+  if (await alreadySent(env, setup.ids["cart-1"], email, 3)) return { sent: false, reason: "series_running" };
+  await memPut("cart-lock", id, { at: Date.now() }, 72 * 3600);
+  const names = productNames.filter(Boolean).map((n) => n.slice(0, 80));
+  const product = names.length > 3 ? `${names.slice(0, 3).join(", ")} (+${names.length - 3})` : names.join(", ");
+  try {
+    const pending = await sendSeries(env, setup, email, CART_SCHEDULE.map(([key, offset]) => [key, createdMs + offset] as [string, number]),
+      { product_name: product || STORE.brand, cart_url: SHOP_URL });
+    await memPut("cart-pending", id, { ids: pending }, 73 * 3600);
+  } catch (error) {
+    await memDelete("cart-lock", id);
+    throw error;
+  }
+  return { sent: true };
 }
 
-export async function unsubscribe(env: MktEnv, email: string, day?: string) {
+/** Post-purchase e-mail 1 (order information) and cancellation of pending abandoned-cart reminders. */
+export async function startPostPurchase(env: MktEnv, email: string, orderNumber: string, sessionId: string) {
+  const id = await shortHash(env, email);
+  const pending = await memGet("cart-pending", id);
+  if (Array.isArray(pending?.ids) && pending.ids.length) { await cancelScheduled(env, pending.ids); await memDelete("cart-pending", id); }
+  const once = await shortHash(env, "purchase-1", sessionId);
+  if (await memGet("purchase", once)) return { sent: false, reason: "already_sent" };
+  await memPut("purchase", once, { at: Date.now() }, 7 * 24 * 3600);
+  const setup = await ensureSetup(env);
+  await sendTemplate(env, setup, "purchase-1", email, { order_number: orderNumber });
+  return { sent: true };
+}
+
+/** Unsubscribe link: remove from this store's list only and cancel the mails of the series still scheduled. */
+export async function unsubscribe(env: MktEnv, email: string, pending: string[] = []) {
   const setup = await ensureSetup(env);
   if (setup.listId) {
     try { await brevo(env, "POST", `/contacts/lists/${setup.listId}/contacts/remove`, { emails: [email] }); }
     catch (error) { if (!(error instanceof BrevoError && error.status === 400)) throw error; } // 400: not in the list
   }
-  const days = [...new Set([...(day ? [day] : []), ...lastDays(4)])];
-  await cancelSeries(env, email, ["welcome-2", "welcome-3", "cart-2", "cart-3"], days);
-}
-
-/** Abandoned cart (marketing): only for confirmed newsletter subscribers of this store. */
-export async function startAbandonedCart(env: MktEnv, email: string, createdMs: number, productNames: string[]) {
-  const setup = await ensureSetup(env);
-  if (!(await isSubscribed(env, setup, email))) return { sent: false, reason: "no_newsletter_consent" };
-  const day = utcDay();
-  const names = productNames.filter(Boolean).map((n) => n.slice(0, 80));
-  const product = names.length > 3 ? `${names.slice(0, 3).join(", ")} (+${names.length - 3})` : names.join(", ");
-  const params = { product_name: product || STORE.brand, cart_url: SHOP_URL, unsubscribe_url: await unsubscribeUrl(env, email, day) };
-  for (const [key, offset] of CART_SCHEDULE) {
-    await sendTemplate(env, setup, key, email, params, {
-      at: createdMs + offset,
-      batch: await batchId(env, email, key, day),
-      idempotency: await shortHash(env, email, key, day),
-    });
-  }
-  return { sent: true };
-}
-
-/** Post-purchase e-mail 1 (order confirmation info) and cancellation of pending abandoned-cart reminders. */
-export async function startPostPurchase(env: MktEnv, email: string, orderNumber: string, sessionId: string) {
-  await cancelSeries(env, email, ["cart-2", "cart-3"], lastDays(4));
-  const setup = await ensureSetup(env);
-  await sendTemplate(env, setup, "purchase-1", email, { order_number: orderNumber }, { idempotency: await shortHash(env, sessionId, "purchase-1") });
-  return { sent: true };
+  const id = await shortHash(env, email);
+  const cart = await memGet("cart-pending", id);
+  await cancelScheduled(env, [...pending, ...(Array.isArray(cart?.ids) ? cart.ids : [])]);
+  await memDelete("cart-pending", id);
 }

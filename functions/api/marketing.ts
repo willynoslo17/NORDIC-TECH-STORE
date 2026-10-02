@@ -6,13 +6,14 @@
  *                     and reports template IDs, the newsletter list and whether the Stripe webhook endpoint for this
  *                     domain is subscribed to checkout.session.expired (needed for abandoned-cart e-mails).
  * POST { action: "test", token, to, keys? } -> sends "[TEST]" copies to one address. Only with the owner's test token
- *                     { action: "scheduled", token, to } -> status of the welcome/cart mails scheduled for that address.
+ *                     { action: "test", ..., scheduleInMinutes: n } schedules one "[TEST]" copy and returns its messageId;
+ *                     { action: "scheduled", token, to, ids, cancel? } -> status (or cancellation) of scheduled messageIds.
  *                     (only its SHA-256 is stored here). Never used for customers.
  * The Brevo API key is never logged or returned.
  */
 import { STORE } from "../_shared/store";
 import { MARKETING_TEMPLATES, MARKETING_VERSION } from "../_shared/marketing-templates";
-import { ensureSetup, sendTemplate, unsubscribeUrl, utcDay, lastDays, batchId, brevo, LIST_NAME, SENDER, SHOP_URL, BrevoError, type MktEnv } from "../_shared/brevo-marketing";
+import { ensureSetup, sendTemplate, unsubscribeUrl, brevo, LIST_NAME, SENDER, SHOP_URL, BrevoError, type MktEnv } from "../_shared/brevo-marketing";
 
 const TEST_TOKEN_SHA256 = "768b08e53ea9c9608fbbe6f9952d65a1369198b83791d3e0f7ec584f8d22f092";
 const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
@@ -75,35 +76,18 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
       try { out[id] = await brevo(env, body?.cancel ? "DELETE" : "GET", body?.cancel ? `/smtp/email/${encodeURIComponent(id)}` : `/smtp/emailStatus/${encodeURIComponent(id)}`) ?? "deleted"; }
       catch (error) { out[id] = { error: (error as Error).message, status: (error as BrevoError).status }; }
     }
-    if (Array.isArray(body?.ids)) return reply({ ok: true, ids: out });
-    for (const day of lastDays(4)) for (const key of ["welcome-2", "welcome-3", "cart-2", "cart-3"]) {
-      try {
-        const s = await brevo(env, "GET", `/smtp/emailStatus/${await batchId(env, to, key, day)}`);
-        out[`${day}:${key}`] = (s?.batches || []).map((b: any) => ({ status: b?.status, scheduledAt: b?.scheduledAt }));
-      } catch (error) { if (!(error instanceof BrevoError && error.status === 404)) out[`${day}:${key}`] = { error: (error as Error).message }; }
-    }
-    return reply({ ok: true, scheduled: out });
+    return reply({ ok: true, ids: out });
   }
   const keys: string[] = Array.isArray(body?.keys) && body.keys.length ? body.keys.map(String) : MARKETING_TEMPLATES.map((t) => t.key);
   const setup = await ensureSetup(env, new URL(request.url).origin);
   const params = {
     product_name: "Testprodukt / Producto de prueba", cart_url: SHOP_URL, order_number: "TEST-0001",
-    unsubscribe_url: await unsubscribeUrl(env, to, utcDay()),
+    unsubscribe_url: await unsubscribeUrl(env, to, Array.isArray(body?.pending) ? body.pending.map(String) : []),
   };
   const results: Record<string, unknown> = {};
-  if (Number(body?.scheduleInMinutes) > 0) {
-    // Scheduling check: one scheduled copy with a deterministic batchId, its Brevo status, optional cancellation.
-    const key = keys[0];
-    const batch = await batchId(env, to, key, "test");
-    const at = Date.now() + Math.min(Number(body.scheduleInMinutes), 4000) * 60 * 1000;
-    const step = async (name: string, fn: () => Promise<unknown>) => { try { results[name] = await fn(); } catch (error) { results[name] = { error: (error as Error).message, code: (error as BrevoError).code }; } };
-    await step("schedule", () => sendTemplate(env, setup, key, to, params, { subjectPrefix: "[TEST] ", at, batch, idempotency: body?.idempotency ? `test-${batch}` : undefined }));
-    await step("status", () => brevo(env, "GET", `/smtp/emailStatus/${batch}`));
-    if (body?.cancel) { await step("cancel", () => brevo(env, "DELETE", `/smtp/email/${batch}`)); await step("statusAfter", () => brevo(env, "GET", `/smtp/emailStatus/${batch}`)); }
-    return reply({ ok: true, batch, results });
-  }
+  const at = Number(body?.scheduleInMinutes) > 0 ? Date.now() + Math.min(Number(body.scheduleInMinutes), 4000) * 60 * 1000 : undefined;
   for (const key of keys.slice(0, 10)) {
-    try { results[key] = await sendTemplate(env, setup, key, to, body?.noParams ? {} : params, { subjectPrefix: "[TEST] " }); }
+    try { results[key] = { messageId: await sendTemplate(env, setup, key, to, body?.noParams ? {} : params, { subjectPrefix: "[TEST] ", at }) }; }
     catch (error) { results[key] = { error: (error as Error).message }; }
   }
   return reply({ ok: true, results });

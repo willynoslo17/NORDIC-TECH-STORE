@@ -25,8 +25,8 @@ const noToken = () => page(
   `<h1>Darse de baja del boletín</h1><p>Usa el enlace al final del correo de ${esc(STORE.brand)}, o escribe a <a href="mailto:${mail}?subject=Baja%20del%20bolet%C3%ADn">${mail}</a> con el asunto «Baja del boletín» y te daremos de baja.</p>`);
 
 async function tokenEmail(env: MktEnv, k: string) {
-  const t = await unseal<{ e?: string; d?: string }>(env, "unsub", k);
-  return t?.e ? { email: String(t.e).toLowerCase(), day: String(t.d || "") } : null;
+  const t = await unseal<{ e?: string; m?: string[] }>(env, "unsub", k);
+  return t?.e ? { email: String(t.e).toLowerCase(), pending: Array.isArray(t.m) ? t.m.map(String) : [] } : null;
 }
 
 export async function onRequestGet(context: { request: Request; env: MktEnv }) {
@@ -45,7 +45,7 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
   const who = env.BREVO_API_KEY ? await tokenEmail(env, k) : null;
   if (!who) return noToken();
   try {
-    await unsubscribe(env, who.email, who.day);
+    await unsubscribe(env, who.email, who.pending);
   } catch (_) {
     return page(`<h1>Noe gikk galt</h1><p>Prøv igjen senere, eller skriv til <a href="mailto:${mail}?subject=Avmelding">${mail}</a> med emnet «Avmelding».</p>`,
       `<h1>Algo salió mal</h1><p>Inténtalo más tarde o escribe a <a href="mailto:${mail}?subject=Baja%20del%20bolet%C3%ADn">${mail}</a> con el asunto «Baja del boletín».</p>`, 502);
