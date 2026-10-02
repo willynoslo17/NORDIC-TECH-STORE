@@ -14,6 +14,7 @@
  */
 import { STORE } from "../_shared/store";
 import { DOI_TEXT } from "../_shared/newsletter-text";
+import { seal } from "../_shared/brevo-marketing";
 
 type Env = { BREVO_API_KEY?: string };
 const API = "https://api.brevo.com/v3";
@@ -194,11 +195,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   if (body?.consent !== true) return reply({ ok: false, error: "Consent required" }, 400);
   if (await limited(request)) return reply({ ok: false, error: "Too many requests" }, 429);
   const origin = new URL(request.url).origin;
+  // After the DOI click Brevo redirects to /api/newsletter-welcome (sends welcome e-mail 1, then shows REDIRECT_URL).
+  let redirectionUrl = REDIRECT_URL;
+  try { redirectionUrl = `https://${STORE.domain}/api/newsletter-welcome?k=${await seal(env, "welcome", { e: email, t: Date.now() })}`; } catch (_) {}
   const send = async (setup: Setup) => brevo(env, "POST", "/contacts/doubleOptinConfirmation", {
     email,
     includeListIds: [setup.listId],
     templateId: setup.templateId,
-    redirectionUrl: REDIRECT_URL,
+    redirectionUrl,
   });
   try {
     try {

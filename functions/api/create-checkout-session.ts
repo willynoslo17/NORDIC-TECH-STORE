@@ -188,6 +188,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     success_url: `${origin}/?payment=success&session_id={CHECKOUT_SESSION_ID}`,
     cancel_url: `${origin}/?payment=cancelled`,
     customer_email: body.email.slice(0, 254),
+    // Unpaid sessions expire after 1 hour (Stripe minimum 30 min); checkout.session.expired then starts the abandoned-cart e-mails.
+    expires_at: String(Math.floor(Date.now() / 1000) + 3600),
     "phone_number_collection[enabled]": "true",
     "metadata[schema]": "nordic-order/v2",
     "metadata[store]": STORE.slug,

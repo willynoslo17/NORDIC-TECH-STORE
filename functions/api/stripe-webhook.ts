@@ -2,12 +2,14 @@ import { STORE } from "../_shared/store";
 import { buildOrderPayload, productLineMetadata } from "../_shared/order-payload";
 import { addressComplete, buildProviderFields, cjProducts, fallbackProviderFields, type CjLogistic } from "../_shared/provider-orders";
 import { chooseCjLogistic } from "../_shared/cj";
+import { startAbandonedCart, startPostPurchase } from "../_shared/brevo-marketing";
 
 type Env = {
   STRIPE_WEBHOOK_SECRET?: string;
   STRIPE_SECRET_KEY?: string;
   MAKE_ORDERS_WEBHOOK?: string;
   CJ_API_KEY?: string;
+  BREVO_API_KEY?: string;
 };
 
 type StripeEvent = {
@@ -103,7 +105,54 @@ async function withProviderOrders(order: ReturnType<typeof buildOrderPayload>, l
   }
 }
 
-export async function onRequestPost(context: { request: Request; env: Env }) {
+
+const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
+
+function sessionEmail(session: Record<string, any>) {
+  const email = String(session?.customer_details?.email || session?.customer_email || "").trim().toLowerCase();
+  return email.length <= 254 && EMAIL.test(email) ? email : "";
+}
+
+/** Did the same address complete a Checkout Session for this store since `sinceSec`? (then no abandoned-cart mail) */
+async function purchasedSince(email: string, sinceSec: number, secretKey: string) {
+  if (!secretKey) return false;
+  const url = new URL("https://api.stripe.com/v1/checkout/sessions");
+  url.searchParams.set("customer_details[email]", email);
+  url.searchParams.set("status", "complete");
+  url.searchParams.set("created[gte]", String(Math.max(0, Math.floor(sinceSec))));
+  url.searchParams.set("limit", "20");
+  try {
+    const response = await fetch(url.toString(), { headers: { Authorization: `Bearer ${secretKey}` } });
+    if (!response.ok) return false;
+    const body = (await response.json()) as { data?: Array<{ metadata?: Record<string, string> }> };
+    return (body.data || []).some((s) => s?.metadata?.store === STORE.slug);
+  } catch { return false; }
+}
+
+/** checkout.session.expired (sessions expire 1 h after creation): abandoned-cart series via Brevo, newsletter subscribers only. */
+async function abandonedCart(session: Record<string, any>, env: Env) {
+  const email = sessionEmail(session);
+  if (!email || String(session.payment_status || "") === "paid") return;
+  const created = Number(session.created) || Math.floor(Date.now() / 1000) - 3600;
+  if (await purchasedSince(email, created, env.STRIPE_SECRET_KEY || "")) return;
+  const items = (await fetchLineItems(String(session.id || ""), env.STRIPE_SECRET_KEY || "")) || [];
+  const names = items
+    .filter((item: any) => item?.price?.product?.metadata?.kind !== "shipping")
+    .map((item: any) => String(item?.description || item?.price?.product?.name || "").trim())
+    .filter(Boolean);
+  await startAbandonedCart(env, email, created * 1000, names);
+}
+
+/** Paid order forwarded: post-purchase e-mail 1 via Brevo (and pending cart reminders are cancelled). */
+async function afterPurchase(session: Record<string, any>, env: Env) {
+  const email = sessionEmail(session);
+  if (!email) return;
+  const meta = (session.metadata || {}) as Record<string, string>;
+  const orderNumber = String(meta.order_id || "").trim() || String(session.id || "").slice(-12);
+  await startPostPurchase(env, email, orderNumber, String(session.id || ""));
+}
+
+export async function onRequestPost(context: { request: Request; env: Env; waitUntil?: (promise: Promise<unknown>) => void }) {
   const secret = context.env.STRIPE_WEBHOOK_SECRET;
   const makeHook = context.env.MAKE_ORDERS_WEBHOOK;
   if (!secret || !makeHook) return Response.json({ error: "Webhook not configured" }, { status: 503 });
@@ -117,6 +166,17 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   let event: StripeEvent;
   try { event = JSON.parse(payload); }
   catch { return Response.json({ error: "Invalid JSON" }, { status: 400 }); }
+
+  // Abandoned cart: only this store's sessions (several stores may share one Stripe account). Never affects the reply.
+  if (event.type === "checkout.session.expired") {
+    const expired = (event.data?.object || {}) as Record<string, any>;
+    if (String(expired?.metadata?.store || "") !== STORE.slug) return Response.json({ received: true, reason: "other_store" });
+    if (context.env.BREVO_API_KEY) {
+      const job = abandonedCart(expired, context.env).catch(() => null);
+      if (context.waitUntil) context.waitUntil(job); else await job;
+    }
+    return Response.json({ received: true, abandoned_cart: Boolean(context.env.BREVO_API_KEY) });
+  }
 
   if (!ORDER_EVENTS.has(String(event.type))) return Response.json({ received: true });
   const session = event.data?.object || {};
@@ -142,6 +202,11 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     body: JSON.stringify(order),
   });
   if (!response.ok) return Response.json({ error: "Automation unavailable" }, { status: 502 });
+  // Post-purchase e-mail 1 (Brevo). Only after the order reached Make, only for this store; never affects the reply.
+  if (context.env.BREVO_API_KEY && String(meta.store || "") === STORE.slug) {
+    const job = afterPurchase(session as Record<string, any>, context.env).catch(() => null);
+    if (context.waitUntil) context.waitUntil(job); else await job;
+  }
   return Response.json({ received: true, forwarded: true });
 }
 
