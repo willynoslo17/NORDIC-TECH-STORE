@@ -4,7 +4,8 @@ import printifyCatalog from "../../catalog/printify-products.json";
 import gelatoCatalog from "../../catalog/gelato-products.json";
 import printfulCatalog from "../../catalog/printful-products.json";
 import { STORE } from "../_shared/store";
-import { displayUsd, verifyQuote, SUPPLIER_ID_FIELDS, type SupplierIds } from "../_shared/quote";
+import { verifyQuote, SUPPLIER_ID_FIELDS, type SupplierIds } from "../_shared/quote";
+import { costUsd, retailNokFromCost, marketUnitAmount } from "../_shared/pricing";
 import { resolveCjVariant } from "../_shared/cj";
 
 type Env = { STRIPE_SECRET_KEY?: string; CJ_API_KEY?: string };
@@ -22,14 +23,15 @@ type ResolvedLine = {
   ref: string;
   sku: string;
   name: string;
-  usd: number;
+  costUsd: number; // supplier cost of the sold variant; the price is derived from it (../_shared/pricing)
   ids: SupplierIds;
   pricingSource: "quote" | "catalog";
   match: string;
 };
 
+/** rate = currency units per EUR (NOK 11.7, the same rate the storefront uses to show EUR/PEN prices). */
 const markets = {
-  NO: { currency: "nok", rate: 11.3, shipping: 79 },
+  NO: { currency: "nok", rate: 11.7, shipping: 79 },
   EU: { currency: "eur", rate: 1, shipping: 7.9 },
   PE: { currency: "pen", rate: 4.05, shipping: 14 },
 } as const;
@@ -72,7 +74,7 @@ const staticIndex = new Map<string, StaticRow>();
 function indexRows(provider: Provider, rows: unknown) {
   if (!Array.isArray(rows)) return;
   for (const row of rows as StaticRow[]) {
-    if (!row || !displayUsd(row)) continue;
+    if (!row || !costUsd(provider, row)) continue;
     const ref = row.id != null ? String(row.id) : "";
     const sku = String(row.sku || "");
     if (ref && !staticIndex.has(`${provider}|ref|${ref}`)) staticIndex.set(`${provider}|ref|${ref}`, row);
@@ -108,7 +110,7 @@ function staticLookup(item: CartItem): ResolvedLine | null {
       ref: row.id != null ? String(row.id) : ref,
       sku: String(row.sku || ""),
       name: String(row.name || "Product").slice(0, 200),
-      usd: displayUsd(row),
+      costUsd: costUsd(provider, row),
       ids: staticIds(provider, row),
       pricingSource: "catalog",
       match: "",
@@ -129,7 +131,7 @@ async function resolveLine(item: CartItem, env: Env): Promise<ResolvedLine | nul
         ref: quote.r,
         sku: quote.k,
         name: quote.n || "Product",
-        usd: quote.u,
+        costUsd: quote.c,
         ids: quote.x || {},
         pricingSource: "quote",
         match: quote.m || "",
@@ -158,16 +160,18 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   }
   if (typeof body.email !== "string" || !body.email.includes("@")) return json("Invalid email", 400);
 
-  // Every line is priced from server data (signed catalog quote or bundled catalog). Anything else is rejected.
-  const lines: { product: ResolvedLine; quantity: number; amount: number }[] = [];
+  // Every line is priced from server data (signed cost quote or bundled catalog cost) with the retail rule
+  // in ../_shared/pricing (cost -> NOK x 2.5, min 99, ending in 9). Browser prices are never used.
+  const lines: { product: ResolvedLine; quantity: number; amount: number; nok: number }[] = [];
   for (let index = 0; index < body.items.length; index++) {
     const item = body.items[index] || {};
     const product = await resolveLine(item, context.env);
-    if (!product || !Number.isFinite(product.usd) || product.usd <= 0) {
+    const nok = product ? retailNokFromCost(product.costUsd) : 0;
+    if (!product || !nok) {
       return json("Invalid product", 400, { line: index });
     }
     const quantity = Math.max(1, Math.min(10, Math.trunc(Number(item.quantity) || 0)));
-    lines.push({ product, quantity, amount: Math.max(50, Math.round(product.usd * market.rate * 100)) });
+    lines.push({ product, quantity, nok, amount: Math.max(50, marketUnitAmount(nok, market.currency, market.rate)) });
   }
 
   // CJ: resolve the default variant (vid) server-side. Checkout still proceeds if it fails; the webhook then reports it in missing_ids.
@@ -211,7 +215,8 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     params.set(`${meta}[line_index]`, String(index));
     params.set(`${meta}[provider]`, line.product.provider);
     params.set(`${meta}[pricing_source]`, line.product.pricingSource);
-    params.set(`${meta}[unit_usd]`, String(line.product.usd));
+    params.set(`${meta}[unit_cost_usd]`, String(line.product.costUsd));
+    params.set(`${meta}[unit_nok]`, String(line.nok));
     if (line.product.sku) params.set(`${meta}[sku]`, line.product.sku.slice(0, 500));
     if (line.product.ref) params.set(`${meta}[ref]`, line.product.ref.slice(0, 500));
     if (line.product.match) params.set(`${meta}[printify_match]`, line.product.match);

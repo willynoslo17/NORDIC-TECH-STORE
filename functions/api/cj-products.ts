@@ -22,6 +22,8 @@ const CJ_LIVE_FALLBACK = "https://nordic-beauty-perfumes.pages.dev/api/cj-produc
 const CACHE_FRESH_MS = 30 * 60 * 1000;
 const CACHE_KEEP_SECONDS = 12 * 3600;
 const EMPTY_RETRY_MS = 30 * 60 * 1000; // genuinely empty after filtering (not a QPS failure)
+/** A CJ call that hangs must not hold the shared in-flight refresh (and every visitor waiting on it) forever. */
+const CJ_FETCH_TIMEOUT_MS = 10000;
 type CachedCatalog = { at: number; payload: any | null };
 const memoryCatalog = new Map<string, CachedCatalog>();
 const inflight = new Map<string, Promise<CachedCatalog | null>>();
@@ -108,6 +110,7 @@ async function getToken(apiKey: string, forceNew = false): Promise<{ token: stri
   }
   for (let attempt = 1; ; attempt++) {
     const response = await fetch(BASE + "/authentication/getAccessToken", {
+      signal: AbortSignal.timeout(CJ_FETCH_TIMEOUT_MS),
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({ apiKey }),
@@ -208,9 +211,29 @@ function score(item: any): number {
   return s;
 }
 
+/** Highest variant price in a CJ "min -- max" sellPrice (= min for single-price products). */
+function parseMaxPrice(value: unknown): number {
+  const parts = String(value || "").split(/\s*-+\s*/).map((v) => Number.parseFloat(v)).filter((n) => Number.isFinite(n) && n > 0);
+  return parts.length ? Math.max(...parts) : 0;
+}
+
+/** Adds supplierPriceMaxUsd (variant price range) to products, also for cached payloads built before it existed. */
+function withCostRange(payload: any) {
+  const raw = new Map<string, any>();
+  for (const item of flatten(payload?.data)) raw.set(String(item?.id || item?.sku || ""), item);
+  const products = (Array.isArray(payload?.products) ? payload.products : []).map((product: any) => {
+    if (product?.supplierPriceMaxUsd != null) return product;
+    const source = raw.get(String(product?.id ?? ""));
+    const max = source ? parseMaxPrice(source.sellPrice || source.nowPrice) : 0;
+    return max > 0 ? { ...product, supplierPriceMaxUsd: max } : product;
+  });
+  return { ...payload, products };
+}
+
 function toProduct(item: any, index: number, sector: string) {
   const cost = parsePrice(item.sellPrice || item.nowPrice);
   const retail = cost > 0 ? Math.round(cost * 2.2 * 100) / 100 : 0;
+  const costMax = parseMaxPrice(item.sellPrice || item.nowPrice) || cost;
   return {
     id: String(item.id || item.sku || index),
     name: String(item.nameEn || item.name || "CJ product").slice(0, 160),
@@ -219,6 +242,7 @@ function toProduct(item: any, index: number, sector: string) {
     sku: String(item.sku || ""),
     image: String(item.bigImage || ""),
     supplierPriceUsd: cost,
+    supplierPriceMaxUsd: costMax,
     suggestedRetailUsd: retail,
     base: retail,
     brand: "CJ Dropshipping",
@@ -250,7 +274,7 @@ async function fetchPage(token: string, keyword: string, page: number, attempt =
   productsUrl.searchParams.set("page", String(page));
   productsUrl.searchParams.set("size", String(FETCH_SIZE));
   productsUrl.searchParams.set("keyWord", keyword);
-  const response = await fetch(productsUrl, { headers: { "CJ-Access-Token": token } });
+  const response = await fetch(productsUrl, { headers: { "CJ-Access-Token": token }, signal: AbortSignal.timeout(CJ_FETCH_TIMEOUT_MS) });
   const result: any = await response.json().catch(() => ({}));
   const msg = String(result?.message || result?.errorCode || "");
   const qps = response.status === 429 || /too many requests|qps/i.test(msg);
@@ -381,10 +405,11 @@ async function viaFallback(query: string, page: number, headers: Record<string, 
   const response = await fetch(proxy.toString(), {
     headers: { "user-agent": "Mozilla/5.0 nordic-cj-fallback" },
   });
-  const result: any = await response.json().catch(() => null);
-  if (!response.ok || !result?.ok) {
-    return Response.json({ error: result?.error || "CJ fallback failed" }, { status: 502, headers });
+  const fetched: any = await response.json().catch(() => null);
+  if (!response.ok || !fetched?.ok) {
+    return Response.json({ error: fetched?.error || "CJ fallback failed" }, { status: 502, headers });
   }
+  const result = withCostRange(fetched);
   return Response.json(
     {
       ...result,
@@ -434,7 +459,8 @@ export async function onRequestGet(context: any) {
       { status: 502, headers: { ...headers, "x-catalog-cache": state } }
     );
   const serve = async (payload: any, state: string) => {
-    const body = { ...payload, products: await withQuotes(context.env, "cj", payload.products, cjIds) };
+    const ranged = withCostRange(payload);
+    const body = { ...ranged, products: await withQuotes(context.env, "cj", ranged.products, cjIds) };
     return Response.json(body, { headers: { ...headers, "x-catalog-cache": state } });
   };
 
@@ -466,6 +492,11 @@ export async function onRequestGet(context: any) {
     })();
     inflight.set(cacheKey, refresh);
     refresh.finally(() => inflight.delete(cacheKey)).catch(() => {});
+  }
+  // Stale copy available: answer at once and let the refresh finish in the background (stale-while-revalidate).
+  if (cached?.payload) {
+    if (typeof context.waitUntil === "function") context.waitUntil(refresh.catch(() => null));
+    return serve(cached.payload, "stale-revalidate");
   }
   let fresh: CachedCatalog | null = null;
   try {

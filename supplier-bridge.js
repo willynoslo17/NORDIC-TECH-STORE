@@ -74,9 +74,57 @@
     return content.flatMap(group => Array.isArray(group.productList) ? group.productList : []);
   }
 
-  function price(value) {
-    const amount = Number.parseFloat(String(value || "").split("-")[0]);
-    return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 2.2 * 100) / 100 : 0;
+  /* Retail price rule (same as functions/_shared/pricing.ts, which also prices the Stripe checkout; keep in sync):
+     NOK = supplier cost of the sold variant (USD x 10.8 / EUR x 11.7) x 2.5, min 99 kr, rounded up to end in 9.
+     Products whose cost can't be determined get price 0 and are not shown. */
+  const NOK_PER = { USD: 10.8, EUR: 11.7 };
+  const MARKUP = 2.5;
+  const MIN_NOK = 99;
+  /** `base` stays EUR-denominated (pages show base x market rate); NOK 11.7 per EUR, same as markets.NO.rate. */
+  const NOK_PER_EUR = NOK_PER.EUR;
+
+  function retailNokFromCost(cost, currency) {
+    const c = Number(cost);
+    if (!Number.isFinite(c) || c <= 0) return 0;
+    const raw = Math.round(c * NOK_PER[currency || "USD"] * MARKUP * 100) / 100;
+    const endsIn9 = Math.ceil((Math.ceil(raw) + 1) / 10) * 10 - 1;
+    return Math.max(MIN_NOK, endsIn9);
+  }
+
+  function num(value) {
+    const n = Number.parseFloat(String(value == null ? "" : value).trim());
+    return Number.isFinite(n) && n > 0 ? n : 0;
+  }
+
+  function priceRange(value) {
+    if (typeof value === "number") return value > 0 ? [value, value] : [0, 0];
+    const parts = String(value == null ? "" : value).split(/\s*-+\s*/).map(num).filter(n => n > 0);
+    return parts.length ? [Math.min(...parts), Math.max(...parts)] : [0, 0];
+  }
+
+  /** Supplier cost (USD) of the variant actually sold, or 0 if unknown (see functions/_shared/pricing.ts). */
+  function costUsd(provider, item) {
+    const p = String(provider || (item && item.provider) || "").toLowerCase();
+    if (p === "cj") {
+      const listed = priceRange(item.sellPrice != null ? item.sellPrice : item.supplierPriceUsd);
+      const max = item.supplierPriceMaxUsd != null ? num(item.supplierPriceMaxUsd) : (listed[1] > listed[0] ? listed[1] : 0);
+      const min = listed[0];
+      if (!min || !max || max < min) return 0;
+      return retailNokFromCost(min) === retailNokFromCost(max) ? max : 0;
+    }
+    if (p === "printify") {
+      const linked = /^[0-9a-f]{24}$/.test(String(item.printifyProductId || "")) && /^\d+$/.test(String(item.printifyVariantId || ""));
+      return linked ? num(item.supplierPriceUsd) : 0;
+    }
+    return 0;
+  }
+
+  /** Retail NOK: the server's priceNok (same rule) when present, otherwise computed from the cost. */
+  function priceNok(provider, item) {
+    const server = Number(item && item.priceNok);
+    if (Number.isFinite(server) && server > 0) return server;
+    const cost = costUsd(provider, item || {});
+    return cost ? retailNokFromCost(cost) : 0;
   }
 
   /* Supplier/catalog status is internal: kept on <html data-catalog-status> for debugging, never shown to customers. */
@@ -85,7 +133,7 @@
   }
 
   function curated(item, index, category, provider) {
-    const amount = Number(item.suggestedRetailUsd || item.supplierPriceUsd || item.base || 0);
+    const nok = priceNok(provider, item);
     const baseId = ID_BASE[provider] || 90001;
     const rawId = item.id != null ? String(item.id) : "";
     /* UI ids must be exact numbers. Long supplier ids (19-digit CJ pids) are never rounded:
@@ -97,7 +145,8 @@
       externalId: String(item.id || item.gelatoProductUid || item.printfulProductId || item.printifyProductId || ""),
       name: item.name || (LABELS[provider] || "Supplier") + " product",
       cat: item.category || item.cat || category,
-      base: amount > 0 ? amount : 0,
+      base: nok > 0 ? nok / NOK_PER_EUR : 0,
+      priceNok: nok,
       v: "v" + ((index % 4) + 1),
       tag: LABELS[provider] || provider,
       brand: item.brand || LABELS[provider] || provider,
@@ -174,13 +223,14 @@
         }
         const live = rows(payload)
           .filter(allowed)
-          .filter(item => item.bigImage && price(item.sellPrice || item.nowPrice) > 0 && price(item.sellPrice || item.nowPrice) <= 1000)
+          .filter(item => item.bigImage && priceNok("cj", { sellPrice: item.sellPrice || item.nowPrice }) > 0)
           .sort((a, b) => ((b.listedNum || 0) + Math.min(b.warehouseInventoryNum || 0, 5000) / 10) - ((a.listedNum || 0) + Math.min(a.warehouseInventoryNum || 0, 5000) / 10))
           .map((item, index) => ({
             id: 10001 + index,
             name: item.nameEn || item.name || "CJ product",
             cat: config.category,
-            base: price(item.sellPrice || item.nowPrice),
+            base: priceNok("cj", { sellPrice: item.sellPrice || item.nowPrice }) / NOK_PER_EUR,
+            priceNok: priceNok("cj", { sellPrice: item.sellPrice || item.nowPrice }),
             v: "v" + ((index % 4) + 1),
             tag: "CJ",
             brand: "CJ Dropshipping",
