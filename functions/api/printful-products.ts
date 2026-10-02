@@ -1,7 +1,88 @@
 import { withQuotes } from "../_shared/quote";
 import { STORE } from "../_shared/store";
+import snapshotRows from "../_shared/catalog-data/printful-snapshot.json";
 
 const BASE = "https://api.printful.com";
+
+/**
+ * Stable Printful catalog (2026-10-02). Every page view used to call Printful live (~60 requests: category lists +
+ * one detail call per product) with no cache. All stores share the Printful rate limit, so under load the category
+ * calls got rate-limited and the feed returned only part of the products (e.g. 4 or 23 of 50) and the grid shrank.
+ * Now: the last good list is cached (isolate memory + Cache API, served at once, refreshed in the background), a
+ * live result is merged with that list and with a bundled server-only snapshot (catalog-data/printful-snapshot.json:
+ * the 50 products each store showed, cost basis = displayed price), so a product that was shown never disappears
+ * because of a failed or partial Printful call. Calls are retried on 429 and detail calls run in small batches.
+ */
+const SNAPSHOT: any[] = Array.isArray(snapshotRows) ? (snapshotRows as any[]) : [];
+const FRESH_MS = 30 * 60 * 1000;
+const KEEP_SECONDS = 7 * 24 * 3600;
+const LIVE_WAIT_MS = 6000;
+const GOOD_KEY = `https://printful-catalog-cache.invalid/v2/${encodeURIComponent(STORE.slug)}`;
+let memoryGood: { at: number; rows: any[] } | null = null;
+let refreshing: Promise<any[]> | null = null;
+let refreshStarted = 0;
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Printful GET with one retry on rate limiting (429) and a hard timeout. */
+async function pfFetch(url: string | URL, headers: Record<string, string>): Promise<Response> {
+  let response = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+  if (response.status === 429) {
+    await sleep(1500);
+    response = await fetch(url, { headers, signal: AbortSignal.timeout(10000) });
+  }
+  return response;
+}
+
+async function readGood(): Promise<{ at: number; rows: any[] } | null> {
+  if (memoryGood) return memoryGood;
+  try {
+    const cache = (globalThis as any).caches?.default;
+    const hit = cache ? await cache.match(GOOD_KEY) : null;
+    if (hit) {
+      const value = (await hit.json()) as { at: number; rows: any[] };
+      if (value && Array.isArray(value.rows)) memoryGood = value;
+    }
+  } catch {
+    /* best effort */
+  }
+  return memoryGood;
+}
+
+async function writeGood(rows: any[]) {
+  memoryGood = { at: Date.now(), rows };
+  try {
+    const cache = (globalThis as any).caches?.default;
+    if (cache) await cache.put(GOOD_KEY, new Response(JSON.stringify(memoryGood), {
+      headers: { "content-type": "application/json", "cache-control": `public, max-age=${KEEP_SECONDS}` },
+    }));
+  } catch {
+    /* best effort */
+  }
+}
+
+/** fresh first (a fresh row whose cost lookup failed keeps the earlier known row), then earlier rows, then snapshot. */
+function mergeRows(fresh: any[], good: any[], snap: any[]): any[] {
+  const known = new Map<string, any>();
+  for (const row of [...snap, ...good]) if (row?.id) known.set(String(row.id), row);
+  const out: any[] = [];
+  const seen = new Set<string>();
+  for (const row of fresh) {
+    const id = String(row?.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(row?._costKnown === false && known.has(id) ? known.get(id) : row);
+  }
+  for (const row of [...good, ...snap]) {
+    const id = String(row?.id || "");
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    out.push(row);
+  }
+  return out;
+}
 
 const SECTOR_ALIASES: Record<string, string> = {
   beauty: "beauty", perfume: "beauty", perfumes: "beauty", skincare: "beauty",
@@ -113,7 +194,7 @@ async function loadStoreProducts(headers: Record<string, string>, sector: string
   const url = new URL(BASE + "/store/products");
   url.searchParams.set("limit", "50");
   url.searchParams.set("offset", "0");
-  const response = await fetch(url, { headers });
+  const response = await pfFetch(url, headers);
   if (!response.ok) return [] as any[];
   const result: any = await response.json().catch(() => ({}));
   const list = Array.isArray(result?.result) ? result.result : [];
@@ -121,7 +202,7 @@ async function loadStoreProducts(headers: Record<string, string>, sector: string
   for (const row of list.slice(0, 50)) {
     const base = normalizeStore(row, out.length, sector);
     try {
-      const detailRes = await fetch(`${BASE}/store/products/${base.id}`, { headers });
+      const detailRes = await pfFetch(`${BASE}/store/products/${base.id}`, headers);
       const detail: any = await detailRes.json().catch(() => ({}));
       if (detailRes.ok) {
         const variants = Array.isArray(detail?.result?.sync_variants) ? detail.result.sync_variants : [];
@@ -155,7 +236,7 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
     if (collected.length >= 60) break;
     const url = new URL(BASE + "/products");
     url.searchParams.set("category_id", String(categoryId));
-    const response = await fetch(url, { headers });
+    const response = await pfFetch(url, headers);
     if (!response.ok) continue;
     const result: any = await response.json().catch(() => ({}));
     const list = Array.isArray(result?.result) ? result.result : [];
@@ -169,12 +250,14 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
   }
   // Price a subset in parallel (first 50)
   const slice = collected.slice(0, 50);
-  const priced = await Promise.all(
-    slice.map(async (row, index) => {
+  const priced: any[] = [];
+  for (let start = 0; start < slice.length; start += 10) priced.push(...await Promise.all(
+    slice.slice(start, start + 10).map(async (row, i) => {
+      const index = start + i;
       let cost = 0;
       let variantId = "";
       try {
-        const detailRes = await fetch(`${BASE}/products/${row.id}`, { headers });
+        const detailRes = await pfFetch(`${BASE}/products/${row.id}`, headers);
         if (detailRes.ok) {
           const detail: any = await detailRes.json();
           const variants = Array.isArray(detail?.result?.variants) ? detail.result.variants : [];
@@ -184,14 +267,15 @@ async function loadCatalogByCategories(headers: Record<string, string>, sector: 
           if (inStock?.image) row.image = inStock.image;
         }
       } catch (_) {}
-      const item = normalizeCatalog(row, index, sector, cost, variantId);
+      const item: any = normalizeCatalog(row, index, sector, cost, variantId);
+      item._costKnown = cost > 0;
       if (!item.suggestedRetailUsd) {
         item.supplierPriceUsd = 12;
         item.suggestedRetailUsd = 28.9;
       }
       return item;
     })
-  );
+  ));
   return priced.filter((p) => p.name && p.suggestedRetailUsd > 0).slice(0, 50);
 }
 
@@ -206,35 +290,46 @@ export async function onRequestGet(context: any) {
   const headers = authHeaders(token || undefined, storeId || undefined);
 
   try {
-    if (token) {
-      const storeProducts = await loadStoreProducts(headers, sector);
-      if (storeProducts.length >= 8) {
-        return Response.json({
-          ok: true,
-          supplier: "Printful",
-          sector,
-          query: sector,
-          products: await withQuotes(context.env, "printful", storeProducts.slice(0, 50), printfulIds),
-          count: Math.min(storeProducts.length, 50),
-          source: "printful-live-store",
-          markets: ["NO", "EU", "PE"],
-          compliance: "EU/Nordic POD merch",
-        }, { headers: headersOut });
+    const live = async (): Promise<{ rows: any[]; source: string }> => {
+      if (token) {
+        const storeProducts = await loadStoreProducts(headers, sector);
+        if (storeProducts.length >= 8) return { rows: storeProducts.slice(0, 50), source: "printful-live-store" };
       }
+      return { rows: await loadCatalogByCategories(headers, sector), source: "printful-live-catalog" };
+    };
+    const good = await readGood();
+    const stale = !good || Date.now() - good.at > FRESH_MS;
+    let fresh: any[] = [];
+    let source = good ? "printful-cache" : "printful-snapshot";
+    if (stale && (!refreshing || Date.now() - refreshStarted > 60000)) {
+      refreshStarted = Date.now();
+      refreshing = live()
+        .then(async (result) => {
+          const merged = mergeRows(result.rows, good?.rows || [], SNAPSHOT);
+          if (result.rows.length) await writeGood(merged);
+          return result.rows;
+        })
+        .catch(() => [] as any[])
+        .finally(() => { refreshing = null; });
+      if (typeof context.waitUntil === "function") context.waitUntil(refreshing);
     }
-
-    const catalog = await loadCatalogByCategories(headers, sector);
+    // No cached list yet in this data centre: wait briefly for Printful, otherwise answer from the snapshot.
+    if (!good && refreshing) {
+      const result = await Promise.race([refreshing, sleep(LIVE_WAIT_MS).then(() => null)]);
+      if (result && result.length) { fresh = result; source = "printful-live-catalog"; }
+    }
+    const rows = mergeRows(fresh, memoryGood?.rows || good?.rows || [], SNAPSHOT);
     return Response.json({
       ok: true,
       supplier: "Printful",
       sector,
       query: sector,
-      products: await withQuotes(context.env, "printful", catalog, printfulIds),
-      count: catalog.length,
-      source: "printful-live-catalog",
+      products: await withQuotes(context.env, "printful", rows, printfulIds),
+      count: rows.length,
+      source,
       markets: ["NO", "EU", "PE"],
       compliance: "EU/Nordic POD merch",
-    }, { status: catalog.length ? 200 : 503, headers: headersOut });
+    }, { status: rows.length ? 200 : 503, headers: headersOut });
   } catch (error) {
     return Response.json({
       error: error instanceof Error ? error.message : "Printful request failed",
