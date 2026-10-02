@@ -207,7 +207,13 @@ export async function sendTemplate(env: MktEnv, setup: Setup, key: string, email
   if (opts.idempotency) body.headers = { "Idempotency-Key": opts.idempotency };
   if (opts.at && opts.at > Date.now() + 60 * 1000) {
     body.scheduledAt = new Date(Math.min(opts.at, Date.now() + MAX_AHEAD_MS)).toISOString();
-    if (opts.batch) body.batchId = opts.batch;
+    if (opts.batch) {
+      // Brevo keeps a client batchId only for batch sends (messageVersions); a single-version batch keeps the mail
+      // cancellable with DELETE /smtp/email/{batchId}.
+      body.batchId = opts.batch;
+      body.messageVersions = [{ to: body.to, params: body.params, ...(body.subject ? { subject: body.subject } : {}) }];
+      delete body.to;
+    }
   }
   try {
     return await brevo(env, "POST", "/smtp/email", body);
