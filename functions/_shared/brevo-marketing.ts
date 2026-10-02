@@ -244,6 +244,9 @@ async function sendSeries(env: MktEnv, setup: Setup, email: string, series: Arra
 export const WELCOME_SCHEDULE: Array<[string, number]> = [["welcome-1", 0], ["welcome-2", 24 * HOUR], ["welcome-3", MAX_AHEAD_MS]];
 /** Abandoned cart after the Checkout Session expired (1 h after creation): 1 now, 2 at 24 h, 3 at 72 h after creation. */
 export const CART_SCHEDULE: Array<[string, number]> = [["cart-1", 1 * HOUR], ["cart-2", 24 * HOUR], ["cart-3", 72 * HOUR]];
+/** Post-purchase e-mail 2 ~3 days after the order (Brevo limit ~72 h). Welcome 4 and post-purchase 3 are due later than
+ * Brevo can schedule; they are sent by /api/marketing-cron (see ./marketing-followups.ts). */
+export const PURCHASE_2_DELAY_MS = MAX_AHEAD_MS;
 
 export async function startWelcome(env: MktEnv, email: string) {
   const setup = await ensureSetup(env);
@@ -293,6 +296,9 @@ export async function startPostPurchase(env: MktEnv, email: string, orderNumber:
   await memPut("purchase", once, { at: Date.now() }, 7 * 24 * 3600);
   const setup = await ensureSetup(env);
   await sendTemplate(env, setup, "purchase-1", email, { order_number: orderNumber });
+  // Post-purchase e-mail 2 (order information: the package is on its way + tracking/shipping page), ~3 days later via
+  // Brevo's scheduledAt (same once-per-session lock as e-mail 1). Never affects e-mail 1.
+  try { await sendTemplate(env, setup, "purchase-2", email, { order_number: orderNumber }, { at: Date.now() + PURCHASE_2_DELAY_MS }); } catch (_) {}
   return { sent: true };
 }
 
