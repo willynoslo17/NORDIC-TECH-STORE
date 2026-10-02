@@ -483,7 +483,7 @@ export async function onRequestGet(context: any) {
         status: winnersStatus(),
         products: rows.map((row) => ({
           id: row.id, sku: row.sku, name: row.name, image: row.image, priceNok: retailNok("cj", row),
-          listedNum: row.listedNum, warehouseInventoryNum: row.warehouseInventoryNum, keyword: row.keyword, vetted: row.vetted,
+          listedNum: row.listedNum, warehouseInventoryNum: row.warehouseInventoryNum, keyword: row.keyword, vetted: row.vetted, ce: row.hasCECertification === true,
         })),
       },
       { headers: { ...headers, "cache-control": "no-store" } }
