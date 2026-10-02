@@ -1,4 +1,5 @@
 import { withQuotes } from "../_shared/quote";
+import curatedSnapshot from "../_shared/catalog-data/cj-curated-snapshot.json";
 import { retailNok } from "../_shared/pricing";
 import { winnerRows, winnersStatus, WINNERS_ONLY, type WinnerDeps } from "../_shared/cj-winners";
 /** Response fields that may be public. The cached payload keeps raw CJ rows (data.content, costs) server-side only. */
@@ -34,6 +35,27 @@ const EMPTY_RETRY_MS = 30 * 60 * 1000; // genuinely empty after filtering (not a
 /** A CJ call that hangs must not hold the shared in-flight refresh (and every visitor waiting on it) forever. */
 const CJ_FETCH_TIMEOUT_MS = 10000;
 type CachedCatalog = { at: number; payload: any | null };
+/**
+ * Never-shrink rule (2026-10-02). A refresh that only gets part of the CJ pages (QPS limit, or CJ's daily API points
+ * running out: "Insufficient API points") used to overwrite the cached set, so the grid lost up to 100 products.
+ * Now a refresh is merged with the cached set (fresh first, earlier products kept), and the storefront list is
+ * topped up with the server-only snapshot of the curated products the store showed earlier today
+ * (catalog-data/cj-curated-snapshot.json, cost basis = the price shown then). Nothing shown before disappears.
+ */
+const CURATED_FLOOR: any[] = Array.isArray(curatedSnapshot) ? (curatedSnapshot as any[]) : [];
+function unionById(first: any[], ...rest: any[][]): any[] {
+  const seen = new Set<string>();
+  const out: any[] = [];
+  for (const list of [first, ...rest]) {
+    for (const row of Array.isArray(list) ? list : []) {
+      const id = String(row?.id ?? "");
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      out.push(row);
+    }
+  }
+  return out;
+}
 const memoryCatalog = new Map<string, CachedCatalog>();
 const inflight = new Map<string, Promise<CachedCatalog | null>>();
 let tokenCache: { key: string; token: string; until: number } | null = null;
@@ -518,7 +540,9 @@ export async function onRequestGet(context: any) {
       { status: 502, headers: { ...headers, "x-catalog-cache": state } }
     );
   const serve = async (payload: any, state: string) => {
-    const ranged = withCostRange(payload);
+    const live = withCostRange(payload);
+    const floor = page === 1 && query === PROFILE.defaultQuery ? CURATED_FLOOR : [];
+    const ranged = { ...live, products: unionById(live.products || [], floor) };
     const shown = new Set<string>((ranged.products || []).map((product: any) => String(product?.id ?? "")));
     const extra = page === 1 && query === PROFILE.defaultQuery ? await winnerRows(winnerDeps(context, url.origin), "grid", shown) : [];
     const body = publicPayload(ranged, await withQuotes(context.env, "cj", [...(ranged.products || []), ...extra], cjIds));
@@ -545,7 +569,11 @@ export async function onRequestGet(context: any) {
         result = await collectWinners(auth.token, query);
       }
       if (result.winners.length) {
-        return writeCatalog(cacheKey, curatedPayload(PROFILE.sector, query, result.winners, result.totalRecords, result.scanned, page));
+        const next = curatedPayload(PROFILE.sector, query, result.winners, result.totalRecords, result.scanned, page);
+        // Keep every product of the cached set that this (possibly partial) refresh did not return.
+        const previous = cached?.payload ? withCostRange(cached.payload).products || [] : [];
+        const products = unionById(next.products || [], previous);
+        return writeCatalog(cacheKey, { ...next, products, count: products.length });
       }
       // CJ answered but every listing was filtered out: remember briefly instead of re-querying on each view.
       if (result.fetched && !cached?.payload) return writeCatalog(cacheKey, null);
