@@ -48,7 +48,10 @@ const KEYWORDS_PER_REFRESH = 6;
 const CJ_GAP_MS = 1100;
 
 type Entry = { at: number; rows: any[] };
-const memory = new Map<string, Entry>();
+/** All keywords live in ONE cache object: Cloudflare counts every Cache API call as a subrequest (limit 50 per request). */
+type Store = { entries: Record<string, Entry> };
+let memory: { at: number; value: Store } | null = null;
+const MEMORY_MS = 60 * 1000;
 let refreshing: Promise<void> | null = null;
 let lastError = "";
 
@@ -56,29 +59,32 @@ function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function keyUrl(origin: string, sector: string, keyword: string) {
-  return `${origin}/__cache/cj-winners/v1?sector=${encodeURIComponent(sector)}&kw=${encodeURIComponent(keyword)}`;
+function storeUrl(origin: string, sector: string) {
+  return `${origin}/__cache/cj-winners/v2?sector=${encodeURIComponent(sector)}`;
 }
 
-async function readEntry(key: string): Promise<Entry | null> {
-  const mem = memory.get(key);
-  if (mem) return mem;
+async function readStore(key: string, fresh = false): Promise<Store> {
+  if (!fresh && memory && Date.now() - memory.at < MEMORY_MS) return memory.value;
+  let value: Store = memory?.value || { entries: {} };
   try {
     const cache = (globalThis as any).caches?.default;
     const hit = cache ? await cache.match(key) : null;
-    if (!hit) return null;
-    const value = (await hit.json()) as Entry;
-    if (!value || typeof value.at !== "number" || !Array.isArray(value.rows)) return null;
-    memory.set(key, value);
-    return value;
+    if (hit) {
+      const parsed = (await hit.json()) as Store;
+      if (parsed && parsed.entries && typeof parsed.entries === "object") value = parsed;
+    }
   } catch {
-    return null;
+    /* keep memory copy */
   }
+  memory = { at: Date.now(), value };
+  return value;
 }
 
-async function writeEntry(key: string, rows: any[]) {
-  const value: Entry = { at: Date.now(), rows };
-  memory.set(key, value);
+async function writeEntries(key: string, updates: Record<string, Entry>) {
+  if (!Object.keys(updates).length) return;
+  const current = await readStore(key, true); // merge with what other isolates wrote meanwhile
+  const value: Store = { entries: { ...current.entries, ...updates } };
+  memory = { at: Date.now(), value };
   try {
     const cache = (globalThis as any).caches?.default;
     if (cache) {
@@ -95,6 +101,7 @@ async function refresh(deps: WinnerDeps, keywords: string[]) {
   let auth = await deps.getToken(deps.apiKey);
   if (auth.fresh) await sleep(CJ_GAP_MS);
   let renewed = auth.fresh;
+  const updates: Record<string, Entry> = {};
   for (let i = 0; i < keywords.length; i++) {
     if (i) await sleep(CJ_GAP_MS);
     const keyword = keywords[i];
@@ -118,9 +125,11 @@ async function refresh(deps: WinnerDeps, keywords: string[]) {
     }
     const rows = deps.flatten(data)
       .filter((item) => item && item.id && item.bigImage && deps.accept(item))
-      .map((item, index) => ({ ...deps.toProduct(item, index, deps.sector), keyword }));
-    await writeEntry(keyUrl(deps.origin, deps.sector, keyword), rows);
+      .map((item, index) => ({ ...deps.toProduct(item, index, deps.sector), keyword }))
+      .filter(eligible);
+    updates[keyword] = { at: Date.now(), rows };
   }
+  await writeEntries(storeUrl(deps.origin, deps.sector), updates);
 }
 
 function eligible(product: any): boolean {
@@ -140,8 +149,9 @@ export async function winnerRows(deps: WinnerDeps, mode: "grid" | "review", skip
   if (!KEYWORDS.length || (mode === "grid" && !PID_SET.size)) return [];
   const byId = new Map<string, any>();
   const stale: string[] = [];
+  const store = await readStore(storeUrl(deps.origin, deps.sector));
   for (const keyword of KEYWORDS) {
-    const entry = await readEntry(keyUrl(deps.origin, deps.sector, keyword));
+    const entry = store.entries[keyword];
     if (!entry || Date.now() - entry.at > FRESH_MS) stale.push(keyword);
     for (const row of entry?.rows || []) {
       const id = String(row?.id || "");
