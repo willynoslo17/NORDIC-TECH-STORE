@@ -1,4 +1,6 @@
 import { withQuotes } from "../_shared/quote";
+import { retailNok } from "../_shared/pricing";
+import { winnerRows, WINNERS_ONLY, type WinnerDeps } from "../_shared/cj-winners";
 /** Response fields that may be public. The cached payload keeps raw CJ rows (data.content, costs) server-side only. */
 const PUBLIC_KEYS = ["ok", "supplier", "sector", "query", "page", "markets", "storefrontCap", "count", "source"];
 function publicPayload(payload: any, products: any[]) {
@@ -431,6 +433,27 @@ async function viaFallback(query: string, page: number, headers: Record<string, 
   );
 }
 
+/** Trend-researched CJ winners (../_shared/cj-winners, data in catalog-data/cj-winners.json), same filters as above. */
+function winnerDeps(context: any, origin: string): WinnerDeps {
+  return {
+    apiKey: String(context.env.CJ_API_KEY || ""),
+    origin,
+    sector: PROFILE.sector,
+    getToken: (key) => getToken(key),
+    fetchPage: (token, keyword, page) => fetchPage(token, keyword, page),
+    flatten,
+    accept: (item) => {
+      const name = String(item?.nameEn || item?.name || "");
+      const price = parsePrice(item?.sellPrice || item?.nowPrice);
+      if (price <= 0 || price > 1000 || blocked(name)) return false;
+      if (PROFILE.compliance === "kids" && KIDS_TOY.test(name) && !(item.hasCECertification === true || item.hasCECertification === "true")) return false;
+      return true;
+    },
+    toProduct,
+    waitUntil: typeof context.waitUntil === "function" ? (promise) => context.waitUntil(promise) : undefined,
+  };
+}
+
 export async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = (url.searchParams.get("q") || PROFILE.defaultQuery).toLowerCase();
@@ -445,6 +468,34 @@ export async function onRequestGet(context: any) {
     "cache-control": "public, max-age=120",
   };
   const apiKey = context.env.CJ_API_KEY;
+
+  // Review list of winner candidates (no costs, no quotes) and the winners-only storefront (cj-winners.json).
+  if (apiKey && url.searchParams.get("winners") === "review") {
+    const rows = await winnerRows(winnerDeps(context, url.origin), "review");
+    return Response.json(
+      {
+        ok: true,
+        supplier: "cj",
+        sector: PROFILE.sector,
+        source: "cj-winners-review",
+        count: rows.length,
+        keywordsCached: new Set(rows.map((row) => row.keyword)).size,
+        products: rows.map((row) => ({
+          id: row.id, sku: row.sku, name: row.name, image: row.image, priceNok: retailNok("cj", row),
+          listedNum: row.listedNum, warehouseInventoryNum: row.warehouseInventoryNum, keyword: row.keyword, vetted: row.vetted,
+        })),
+      },
+      { headers: { ...headers, "cache-control": "no-store" } }
+    );
+  }
+  if (apiKey && WINNERS_ONLY) {
+    const rows = page === 1 ? await winnerRows(winnerDeps(context, url.origin), "grid") : [];
+    const products = await withQuotes(context.env, "cj", rows, cjIds);
+    return Response.json(
+      { ok: true, supplier: "cj", sector: PROFILE.sector, query, page, markets: ["NO", "EU", "PE"], count: products.length, source: "cj-winners", products },
+      { headers }
+    );
+  }
 
   if (!apiKey) {
     if (!PROFILE.enableFallback) {
@@ -467,7 +518,9 @@ export async function onRequestGet(context: any) {
     );
   const serve = async (payload: any, state: string) => {
     const ranged = withCostRange(payload);
-    const body = publicPayload(ranged, await withQuotes(context.env, "cj", ranged.products, cjIds));
+    const shown = new Set<string>((ranged.products || []).map((product: any) => String(product?.id ?? "")));
+    const extra = page === 1 && query === PROFILE.defaultQuery ? await winnerRows(winnerDeps(context, url.origin), "grid", shown) : [];
+    const body = publicPayload(ranged, await withQuotes(context.env, "cj", [...(ranged.products || []), ...extra], cjIds));
     return Response.json(body, { headers: { ...headers, "x-catalog-cache": state } });
   };
 

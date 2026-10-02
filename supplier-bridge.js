@@ -173,7 +173,7 @@
             .filter(allowed)
             .map((item, index) => curated({ ...item, brand: item.brand || "CJ Dropshipping", supplier: item.supplier || "CJ Dropshipping" }, index, config.category, "cj"))
             .filter(item => item.base > 0)
-            .slice(0, 150);
+            .slice(0, 600); // curated set (150) + trend winners
         }
       }
     } catch (_) {
@@ -181,6 +181,7 @@
     } finally {
       clearTimeout(timer);
     }
+    if (config.cjLocalFallback === false) return []; // store sells CJ winners only (no generic local fallback)
     const localItems = await loadJson(LOCAL_FILES.cj);
     return localItems.filter(allowed).map((item, index) => curated(item, index, config.category, "cj")).filter(item => item.base > 0).slice(0, 150);
   }
