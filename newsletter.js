@@ -1,4 +1,4 @@
-/* Footer newsletter signup (double opt-in via /api/newsletter). The consent box is optional, unchecked by default
+/* Footer newsletter signup (double opt-in via /api/newsletter, Brevo). The consent box is optional, unchecked by default
    and has nothing to do with buying. The form stays disabled until the server reports that sending is configured. */
 (function () {
   "use strict";
@@ -41,6 +41,8 @@
         form.reset();
         say("Takk! Sjekk e-posten din og bekreft påmeldingen. Du blir ikke lagt til før du har bekreftet.",
             "¡Gracias! Revisa tu correo y confirma la suscripción. No te añadiremos hasta que la confirmes.");
+      } else if (response.status === 429) {
+        say("For mange forsøk. Prøv igjen om noen minutter.", "Demasiados intentos. Inténtalo de nuevo en unos minutos.");
       } else if (response.status === 400) {
         say("Sjekk e-postadressen og samtykket.", "Revisa la dirección de correo y el consentimiento.");
       } else {
