@@ -208,11 +208,17 @@
 
   /* Cart rendering looks items up with list.find(), so find() on the storefront list also searches every
      supplier catalog (e.g. items restored from a saved cart that are de-duplicated out of the grid). */
+  /* Size/colour lines chosen in variant-picker.js: never in the grid, but found by the cart. */
+  function variantPool(mapper) {
+    const extra = typeof window.nordicVariantItems === "function" ? window.nordicVariantItems() : [];
+    return mapper ? extra.map(mapper) : extra;
+  }
+
   function withCrossCatalogFind(list, mapper) {
     const all = Object.keys(window.nordicCatalogs || {}).flatMap(k => Array.isArray(window.nordicCatalogs[k]) ? window.nordicCatalogs[k] : []);
     const pool = mapper ? all.map(mapper) : all;
     Object.defineProperty(list, "find", {
-      value: function (predicate, thisArg) { return Array.prototype.find.call(this, predicate, thisArg) || pool.find(predicate, thisArg); },
+      value: function (predicate, thisArg) { return Array.prototype.find.call(this, predicate, thisArg) || pool.find(predicate, thisArg) || variantPool(mapper).find(predicate, thisArg); },
       configurable: true, writable: true, enumerable: false
     });
     return list;

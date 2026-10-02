@@ -49,12 +49,18 @@
     else if (typeof rc === "function") rc();
   }
 
+  function variantItem(id) {
+    return typeof window.nordicVariantItem === "function" ? window.nordicVariantItem(id) : null;
+  }
+
   function productById(id) {
-    return currentProducts().find(item => String(item.id) === String(id));
+    return currentProducts().find(item => String(item.id) === String(id)) || variantItem(id) || undefined;
   }
 
   /* Full product record (incl. server-signed quote and supplier refs) from any supplier catalog. */
   function catalogProductById(id) {
+    const variant = variantItem(id); /* chosen size/colour: its own signed quote (cj_pid + cj_vid) */
+    if (variant) return variant;
     const catalogs = window.nordicCatalogs || {};
     for (const key of Object.keys(catalogs)) {
       const list = Array.isArray(catalogs[key]) ? catalogs[key] : [];
@@ -271,7 +277,7 @@
     if (marketSelect) marketSelect.addEventListener("change", saveCartSoon);
   }
 
-  window.NordicCommerce = { init };
+  window.NordicCommerce = { init, saveCart: saveCartSoon };
   /* Start once every supplier catalog has answered or timed out (supplier-bridge.js), at the latest after 12 s. */
   if (window.nordicCatalogReady) setTimeout(init, 0);
   else {

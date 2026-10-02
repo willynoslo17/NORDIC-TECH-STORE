@@ -40,7 +40,7 @@ function isQps(status: number, body: any) {
   return status === 429 || /too many requests|qps/i.test(String(body?.message || ""));
 }
 
-async function cjJson(url: string, init: RequestInit, attempt = 1): Promise<any> {
+export async function cjJson(url: string, init: RequestInit, attempt = 1): Promise<any> {
   const response = await paced(() => fetch(url, { ...init, signal: AbortSignal.timeout(8000) }));
   const body: any = await response.json().catch(() => ({}));
   if (isQps(response.status, body) && attempt < 3) {
@@ -53,7 +53,7 @@ async function cjJson(url: string, init: RequestInit, attempt = 1): Promise<any>
   return body;
 }
 
-async function cjToken(apiKey: string): Promise<string> {
+export async function cjToken(apiKey: string): Promise<string> {
   if (tokenCache && tokenCache.key === apiKey && tokenCache.until > Date.now()) return tokenCache.token;
   const body = await cjJson(`${CJ_BASE}/authentication/getAccessToken`, {
     method: "POST",
