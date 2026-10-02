@@ -1,4 +1,11 @@
 import { withQuotes } from "../_shared/quote";
+/** Response fields that may be public. The cached payload keeps raw CJ rows (data.content, costs) server-side only. */
+const PUBLIC_KEYS = ["ok", "supplier", "sector", "query", "page", "markets", "storefrontCap", "count", "source"];
+function publicPayload(payload: any, products: any[]) {
+  const out: Record<string, unknown> = {};
+  for (const key of PUBLIC_KEYS) if (payload?.[key] !== undefined) out[key] = payload[key];
+  return { ...out, count: products.length, products };
+}
 /**
  * Nordic CJ live curated catalog.
  * Fetches real CJ provider products, scores winners, returns boutique storefront set.
@@ -409,11 +416,11 @@ async function viaFallback(query: string, page: number, headers: Record<string, 
   if (!response.ok || !fetched?.ok) {
     return Response.json({ error: fetched?.error || "CJ fallback failed" }, { status: 502, headers });
   }
+  // The proxied store no longer publishes costs, so its rows come back unpriced (hidden) unless they carry a cost.
   const result = withCostRange(fetched);
   return Response.json(
     {
-      ...result,
-      products: await withQuotes(env, "cj", Array.isArray(result.products) ? result.products : [], cjIds),
+      ...publicPayload(result, await withQuotes(env, "cj", Array.isArray(result.products) ? result.products : [], cjIds)),
       sector: PROFILE.sector,
       query,
       page,
@@ -460,7 +467,7 @@ export async function onRequestGet(context: any) {
     );
   const serve = async (payload: any, state: string) => {
     const ranged = withCostRange(payload);
-    const body = { ...ranged, products: await withQuotes(context.env, "cj", ranged.products, cjIds) };
+    const body = publicPayload(ranged, await withQuotes(context.env, "cj", ranged.products, cjIds));
     return Response.json(body, { headers: { ...headers, "x-catalog-cache": state } });
   };
 

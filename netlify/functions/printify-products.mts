@@ -1,4 +1,4 @@
-import LINKED from "../../catalog/printify-selected.json";
+import LINKED from "../../functions/_shared/catalog-data/printify-selected.json";
 
 /** Netlify mirror (Cloudflare Pages is the live host): serves ONLY rows linked to real products in Printify shop 28847802. */
 const PRODUCT_ID = /^[0-9a-f]{24}$/;

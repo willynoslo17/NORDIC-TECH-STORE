@@ -1,5 +1,5 @@
 import { withQuotes } from "../_shared/quote";
-import LINKED from "../../catalog/printify-selected.json";
+import LINKED from "../_shared/catalog-data/printify-selected.json";
 
 /**
  * Printify catalog = ONLY real products that exist in Printify shop 28847802 ("Printify ML").

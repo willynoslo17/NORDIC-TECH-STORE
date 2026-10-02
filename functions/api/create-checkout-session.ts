@@ -1,8 +1,7 @@
-import cjCatalog from "../../catalog/selected-products.json";
-import printifySelected from "../../catalog/printify-selected.json";
-import printifyCatalog from "../../catalog/printify-products.json";
-import gelatoCatalog from "../../catalog/gelato-products.json";
-import printfulCatalog from "../../catalog/printful-products.json";
+// Server-only cost tables (functions/ is not served by Pages); the public /catalog copies carry priceNok only.
+import cjCatalog from "../_shared/catalog-data/cj-selected.json";
+import printifySelected from "../_shared/catalog-data/printify-selected.json";
+import printifyCatalog from "../_shared/catalog-data/printify-products.json";
 import { STORE } from "../_shared/store";
 import { verifyQuote, SUPPLIER_ID_FIELDS, type SupplierIds } from "../_shared/quote";
 import { costUsd, retailNokFromCost, marketUnitAmount } from "../_shared/pricing";
@@ -69,7 +68,7 @@ function staticIds(provider: Provider, row: StaticRow): SupplierIds {
   };
 }
 
-/** Server-bundled catalogs (the same JSON the storefront falls back to), indexed by provider + ref and provider + sku. */
+/** Server-only cost tables (same rows as the storefront's public fallback JSON), indexed by provider + ref and provider + sku. */
 const staticIndex = new Map<string, StaticRow>();
 function indexRows(provider: Provider, rows: unknown) {
   if (!Array.isArray(rows)) return;
@@ -84,8 +83,7 @@ function indexRows(provider: Provider, rows: unknown) {
 indexRows("cj", cjCatalog);
 indexRows("printify", printifySelected);
 indexRows("printify", printifyCatalog);
-indexRows("gelato", gelatoCatalog);
-indexRows("printful", printfulCatalog);
+// Gelato / Printful rows carry no verified cost (see ../_shared/pricing), so they are never sold from a static table.
 
 /** Real Printify shop products (product_id|variant_id) the store sells; anything else is not sold via Printify. */
 const linkedPrintify = new Set<string>(
@@ -160,7 +158,7 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   }
   if (typeof body.email !== "string" || !body.email.includes("@")) return json("Invalid email", 400);
 
-  // Every line is priced from server data (signed cost quote or bundled catalog cost) with the retail rule
+  // Every line is priced from server data (encrypted cost quote or server-only catalog cost) with the retail rule
   // in ../_shared/pricing (cost -> NOK x 2.5, min 99, ending in 9). Browser prices are never used.
   const lines: { product: ResolvedLine; quantity: number; amount: number; nok: number }[] = [];
   for (let index = 0; index < body.items.length; index++) {
