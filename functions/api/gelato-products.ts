@@ -315,17 +315,6 @@ function prettyTitle(productUid: string, catalogUid: string, product: any, meta?
   return titleFromUid(productUid, catalogUid, meta);
 }
 
-function estimateRetail(catalogUid: string) {
-  const c = String(catalogUid || "").toLowerCase();
-  if (c.includes("mug")) return { cost: 6.5, retail: 18.9 };
-  if (c.includes("tote")) return { cost: 7.1, retail: 22.5 };
-  if (c.includes("poster") || c.includes("canvas")) return { cost: 8.2, retail: 24.9 };
-  if (c.includes("phone") || c.includes("case")) return { cost: 8.8, retail: 24.9 };
-  if (c.includes("pillow")) return { cost: 11, retail: 32.9 };
-  if (c.includes("apparel") || c.includes("shirt") || c.includes("hoodie")) return { cost: 9.4, retail: 29.9 };
-  return { cost: 9, retail: 26.9 };
-}
-
 /** Collapse color/size variants so catalogs get product diversity, not 50 beanies. */
 function familyKey(productUid: string) {
   return String(productUid || "")
@@ -363,9 +352,11 @@ function normalizeCatalogProduct(
   meta?: CatalogMeta | null,
 ) {
   const uid = String(product?.productUid || product?.id || `gelato-${index}`);
-  const prices = estimateRetail(catalogUid);
-  const retail = money(product?.price?.basePrice ?? product?.price?.amount ?? product?.price) || prices.retail;
-  const cost = money(product?.cost ?? product?.supplierPrice) || prices.cost;
+  // No estimated costs any more: the real cost comes from the Gelato price API (see gelatoCostUsd); until then the
+  // listed price, if Gelato gives one, is the cost basis (owner rule 2026-10-02).
+  const listed = money(product?.price?.basePrice ?? product?.price?.amount ?? product?.price ?? product?.cost ?? product?.supplierPrice);
+  const retail = listed;
+  const cost = listed;
   return {
     id: uid,
     sku: uid.slice(0, 48),
@@ -566,58 +557,209 @@ function gelatoIds(product: any) {
   return { gelato_product_uid: product?.gelatoProductUid };
 }
 
+/**
+ * Real Gelato data (2026-10-02): images come from the Gelato store products (templates published to the
+ * e-commerce store: previewUrl / productImages), the cost from the Gelato price API
+ * (GET product.gelatoapis.com/v3/products/{productUid}/prices?country=NO&currency=USD, quantity 1).
+ * Only products with BOTH an image and a real cost are returned; `diagnostics` (counts and Gelato HTTP
+ * statuses, no costs) shows what the Gelato API actually returned. Results are cached for 30 minutes.
+ */
+const GELATO_FRESH_MS = 30 * 60 * 1000;
+const GELATO_KEEP_SECONDS = 12 * 3600;
+const GELATO_TIMEOUT_MS = 8000;
+const PRICE_CONCURRENCY = 6;
+const MAX_PRICE_LOOKUPS = 60;
+const USD_PER_EUR = 11.7 / 10.8;
+type Diagnostics = Record<string, any>;
+const gelatoMemory = new Map<string, { at: number; payload: any }>();
+const gelatoInflight = new Map<string, Promise<any>>();
+
+function bump(diag: Diagnostics, key: string, status: number | string) {
+  diag[key] = diag[key] || {};
+  diag[key][String(status)] = (diag[key][String(status)] || 0) + 1;
+}
+
+async function gelatoJson(url: string, headers: Record<string, string>, diag: Diagnostics, key: string, init: RequestInit = {}) {
+  try {
+    const response = await fetch(url, { ...init, headers, signal: AbortSignal.timeout(GELATO_TIMEOUT_MS) });
+    bump(diag, key, response.status);
+    if (!response.ok) return null;
+    return await response.json().catch(() => null);
+  } catch (error) {
+    bump(diag, key, error instanceof Error && error.name === "TimeoutError" ? "timeout" : "error");
+    return null;
+  }
+}
+
+/** Gelato cost in USD for one unit of productUid shipped to Norway, 0 if Gelato returns none. */
+async function gelatoCostUsd(headers: Record<string, string>, productUid: string, diag: Diagnostics): Promise<number> {
+  const url = `${PRODUCT_BASE}/v3/products/${encodeURIComponent(productUid)}/prices?country=NO&currency=USD`;
+  const result: any = await gelatoJson(url, headers, diag, "priceStatus");
+  const rows: any[] = Array.isArray(result) ? result : Array.isArray(result?.prices) ? result.prices : [];
+  if (!diag.priceSample && rows[0]) diag.priceSample = Object.keys(rows[0]).join(",");
+  const unit = rows.filter((row) => row && (row.quantity == null || Number(row.quantity) === 1));
+  const amounts = unit
+    .map((row) => {
+      const price = Number(row.price);
+      if (!Number.isFinite(price) || price <= 0) return 0;
+      const currency = String(row.currency || "USD").toUpperCase();
+      if (currency === "USD") return price;
+      if (currency === "EUR") return price * USD_PER_EUR;
+      bump(diag, "priceCurrency", currency);
+      return 0;
+    })
+    .filter((n) => n > 0);
+  return amounts.length ? Math.round(Math.min(...amounts) * 100) / 100 : 0;
+}
+
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out: R[] = new Array(items.length);
+  let next = 0;
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      out[index] = await fn(items[index]);
+    }
+  }));
+  return out;
+}
+
+function storeImage(product: any): string {
+  const images = Array.isArray(product?.productImages) ? product.productImages : [];
+  const first = images.find((img: any) => img?.fileUrl || img?.url || img?.previewUrl);
+  return String(product?.previewUrl || first?.fileUrl || first?.url || first?.previewUrl || product?.imageUrl || "");
+}
+
+/** Published Gelato store products (from templates) with their first variant's productUid, image and real cost. */
+async function loadGelatoStore(headers: Record<string, string>, storeId: string, sector: string, diag: Diagnostics) {
+  const listed: any[] = [];
+  for (let offset = 0; offset < 300; offset += 100) {
+    const url = `${ECOM_BASE}/v1/stores/${encodeURIComponent(storeId)}/products?limit=100&offset=${offset}`;
+    const result: any = await gelatoJson(url, headers, diag, "storeListStatus");
+    const page = Array.isArray(result?.products) ? result.products : Array.isArray(result) ? result : [];
+    listed.push(...page);
+    if (page.length < 100) break;
+  }
+  diag.storeProducts = listed.length;
+  const detailed = await mapLimit(listed.slice(0, MAX_PRICE_LOOKUPS), PRICE_CONCURRENCY, async (product: any) => {
+    let full = product;
+    let variants = Array.isArray(product?.variants) ? product.variants : [];
+    if (!variants.length || !storeImage(product)) {
+      const detail: any = await gelatoJson(`${ECOM_BASE}/v1/stores/${encodeURIComponent(storeId)}/products/${encodeURIComponent(String(product?.id || ""))}`, headers, diag, "storeDetailStatus");
+      if (detail) { full = { ...product, ...detail }; variants = Array.isArray(detail?.variants) ? detail.variants : variants; }
+    }
+    const variant = variants.find((v: any) => v?.productUid) || {};
+    const productUid = String(variant.productUid || full?.productUid || "");
+    const image = storeImage(full);
+    const listPrice = money(variant?.price ?? full?.price?.amount ?? full?.price);
+    const cost = productUid ? await gelatoCostUsd(headers, productUid, diag) : 0;
+    if (productUid) diag.storeWithProductUid = (diag.storeWithProductUid || 0) + 1;
+    if (image) diag.storeWithImage = (diag.storeWithImage || 0) + 1;
+    if (cost) diag.storeWithCost = (diag.storeWithCost || 0) + 1;
+    return {
+      id: String(full?.id || productUid),
+      sku: String(variant?.externalId || variant?.id || productUid).slice(0, 64),
+      supplier: "Gelato",
+      provider: "gelato",
+      gelatoProductUid: productUid,
+      name: String(full?.title || full?.name || variant?.title || "Gelato product").slice(0, 160),
+      category: String(full?.category || full?.productType || sector),
+      brand: "Gelato",
+      description: String(full?.description || "").replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim().slice(0, 600),
+      // Real cost from the price API; the store's listed price only if Gelato returns no cost (owner rule).
+      supplierPriceUsd: cost || listPrice,
+      costSource: cost ? "gelato-price-api" : listPrice ? "gelato-list-price" : "",
+      image,
+      sector,
+      compliance: "EU/Nordic POD merch",
+    };
+  });
+  return detailed.filter((p) => p.image && p.gelatoProductUid && p.supplierPriceUsd > 0);
+}
+
+async function buildGelato(env: any, sector: string) {
+  const diag: Diagnostics = { at: new Date().toISOString() };
+  const headers = { "X-API-KEY": String(env.GELATO_API_KEY), "content-type": "application/json", "User-Agent": "NordicStore/1.0" };
+  let storeId = env.GELATO_STORE_ID ? String(env.GELATO_STORE_ID) : "";
+  diag.storeIdFromEnv = Boolean(storeId);
+  if (!storeId) {
+    const stores: any = await gelatoJson(`${ECOM_BASE}/v1/stores`, headers, diag, "storesStatus");
+    const list = Array.isArray(stores?.stores) ? stores.stores : Array.isArray(stores) ? stores : [];
+    diag.stores = list.length;
+    if (stores && !Array.isArray(stores)) diag.storesResponseKeys = Object.keys(stores).join(",");
+    storeId = String(list[0]?.id || list[0]?.storeId || "");
+  }
+  let products: any[] = [];
+  if (storeId) products = await loadGelatoStore(headers, storeId, sector, diag);
+  // Blank catalog products: Gelato's catalog search returns no images, so they are shown only if one has an image.
+  if (!products.length) {
+    const catalog = await loadCatalogProducts(headers, sector);
+    diag.catalogProducts = catalog.length;
+    const withImage = catalog.filter((p: any) => p.image);
+    diag.catalogWithImage = withImage.length;
+    // What Gelato returns for a blank catalog product (field names only) and whether its price API answers.
+    const raw = await searchCatalog(headers, String(catalog[0]?.catalogUid || "mugs"), 1, 0).catch(() => []);
+    if (raw[0]) diag.catalogProductFields = Object.keys(raw[0]).join(",");
+    if (catalog[0]?.gelatoProductUid) diag.catalogPriceProbe = (await gelatoCostUsd(headers, catalog[0].gelatoProductUid, diag)) > 0 ? "cost returned" : "no cost";
+    const costs = await mapLimit(withImage.slice(0, MAX_PRICE_LOOKUPS), PRICE_CONCURRENCY, (p: any) => gelatoCostUsd(headers, p.gelatoProductUid, diag));
+    products = withImage.slice(0, MAX_PRICE_LOOKUPS).map((p: any, i: number) => ({ ...p, supplierPriceUsd: costs[i] || p.supplierPriceUsd, costSource: costs[i] ? "gelato-price-api" : "gelato-list-price" }))
+      .filter((p: any) => p.supplierPriceUsd > 0);
+  }
+  diag.shown = products.length;
+  diag.costSources = products.reduce((acc: any, p: any) => { acc[p.costSource || "none"] = (acc[p.costSource || "none"] || 0) + 1; return acc; }, {});
+  return { products: products.slice(0, 50), diag, source: storeId && products.length && !diag.catalogProducts ? "gelato-live-store" : "gelato-live-catalog" };
+}
+
 export async function onRequestGet(context: any) {
-  const url = new URL(context.request.url);
-  const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
   // Each shop serves its own sector only (a missing or foreign ?q= used to fall back to "beauty").
   const sector = STORE.sector;
   const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
-  const apiKey = context.env.GELATO_API_KEY;
-  if (!apiKey) {
+  if (!context.env.GELATO_API_KEY) {
     return Response.json({ error: "Gelato is not configured", products: [], supplier: "Gelato", sector, source: "gelato-unconfigured" }, { status: 503, headers: headersOut });
   }
-  const headers = { "X-API-KEY": String(apiKey), "content-type": "application/json", "User-Agent": "NordicStore/1.0" };
-
+  const origin = new URL(context.request.url).origin;
+  const key = `${origin}/__cache/gelato-products/v3?sector=${encodeURIComponent(sector)}`;
+  const cache = (globalThis as any).caches?.default;
+  let cached = gelatoMemory.get(key) || null;
+  if (!cached && cache) {
+    try { const hit = await cache.match(key); if (hit) cached = await hit.json(); } catch (_) {}
+  }
+  const refresh = () => {
+    let job = gelatoInflight.get(key);
+    if (!job) {
+      job = buildGelato(context.env, sector).then(async (payload) => {
+        const value = { at: Date.now(), payload };
+        gelatoMemory.set(key, value);
+        try { if (cache) await cache.put(key, new Response(JSON.stringify(value), { headers: { "content-type": "application/json", "cache-control": `public, max-age=${GELATO_KEEP_SECONDS}` } })); } catch (_) {}
+        return value;
+      });
+      gelatoInflight.set(key, job);
+      job.finally(() => gelatoInflight.delete(key)).catch(() => {});
+    }
+    return job;
+  };
   try {
-    let storeId = context.env.GELATO_STORE_ID ? String(context.env.GELATO_STORE_ID) : "";
-    if (!storeId) {
-      const storesRes = await fetch(`${ECOM_BASE}/v1/stores`, { headers });
-      if (storesRes.ok) {
-        const stores: any = await storesRes.json().catch(() => ({}));
-        const list = Array.isArray(stores?.stores) ? stores.stores : Array.isArray(stores) ? stores : [];
-        storeId = String(list[0]?.id || list[0]?.storeId || "");
-      }
+    let value = cached;
+    let state = "hit";
+    if (!value) { value = await refresh(); state = "miss"; }
+    else if (Date.now() - value.at > GELATO_FRESH_MS) {
+      state = "stale-revalidate";
+      if (typeof context.waitUntil === "function") context.waitUntil(refresh().catch(() => null));
     }
-    if (storeId) {
-      const storeProducts = await loadStoreProducts(headers, storeId, sector);
-      if (storeProducts.length >= 8) {
-        return Response.json({
-          ok: true,
-          supplier: "Gelato",
-          sector,
-          query: sector,
-          products: await withQuotes(context.env, "gelato", storeProducts.slice(0, 50), gelatoIds),
-          count: Math.min(storeProducts.length, 50),
-          source: "gelato-live-store",
-          storeId,
-          markets: ["NO", "EU", "PE"],
-          compliance: "EU/Nordic POD merch",
-        }, { headers: headersOut });
-      }
-    }
-
-    const catalog = await loadCatalogProducts(headers, sector);
+    const { products, diag, source } = value!.payload;
+    const priced = await withQuotes(context.env, "gelato", products, gelatoIds);
     return Response.json({
       ok: true,
       supplier: "Gelato",
       sector,
       query: sector,
-      products: await withQuotes(context.env, "gelato", catalog, gelatoIds),
-      count: catalog.length,
-      source: "gelato-live-catalog",
+      products: priced,
+      count: priced.length,
+      source,
+      diagnostics: diag,
       markets: ["NO", "EU", "PE"],
       compliance: "EU/Nordic POD merch",
-    }, { status: catalog.length ? 200 : 503, headers: headersOut });
+    }, { status: priced.length ? 200 : 503, headers: { ...headersOut, "x-catalog-cache": state } });
   } catch (error) {
     return Response.json({
       error: error instanceof Error ? error.message : "Gelato request failed",
