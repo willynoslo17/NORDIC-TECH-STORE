@@ -1,4 +1,5 @@
-/* Nordic supplier bridge: separate CJ / Printify / Gelato / Printful catalogs (no blend). Sector query mirrors CJ. */
+/* Nordic supplier bridge: CJ / Printify / Gelato / Printful catalogs load in parallel and are shown together as one
+   storefront grid ("Alle produkter"). Each source is rendered as soon as it arrives; supplier data stays internal. */
 (function () {
   "use strict";
 
@@ -39,6 +40,24 @@
   };
   const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
+  /** A slow supplier endpoint never blocks the grid: after this many ms its local fallback is used instead. */
+  const SOURCE_TIMEOUT_MS = 8000;
+  const SOURCE_ORDER = ["cj", "printify", "gelato", "printful"];
+  /** Customer-facing (Norwegian) names for supplier category values. Per-store overrides: config.catMap. */
+  const CAT_NB = {
+    "apparel": "Klær",
+    "kids apparel": "Barneklær",
+    "baby apparel": "Babyklær",
+    "mugs": "Krus",
+    "posters": "Plakater",
+    "canvas": "Lerretsbilder",
+    "bags": "Vesker",
+    "tote-bags": "Handlenett",
+    "stationery": "Papirvarer",
+    "accessories": "Tilbehør",
+    "home": "Hjem",
+    "phone-cases": "Mobildeksler"
+  };
   const BRAND_COLORS = {
     cj: "#0f766e",
     printify: "#7c3aed",
@@ -60,16 +79,9 @@
     return Number.isFinite(amount) && amount > 0 ? Math.round(amount * 2.2 * 100) / 100 : 0;
   }
 
+  /* Supplier/catalog status is internal: kept on <html data-catalog-status> for debugging, never shown to customers. */
   function setStatus(text, online) {
-    let badge = document.querySelector("[data-supplier-status]");
-    if (!badge) {
-      badge = document.createElement("div");
-      badge.dataset.supplierStatus = "";
-      badge.style.cssText = "position:fixed;left:14px;bottom:14px;z-index:25;padding:8px 11px;border-radius:999px;background:#fff;border:1px solid #d8dee8;box-shadow:0 4px 18px #0002;font:700 11px/1.2 Inter,Arial,sans-serif;color:#334155";
-      document.body.appendChild(badge);
-    }
-    badge.textContent = (online ? "● " : "○ ") + text;
-    badge.style.color = online ? "#047857" : "#64748b";
+    document.documentElement.setAttribute("data-catalog-status", (online ? "online: " : "offline: ") + text);
   }
 
   function curated(item, index, category, provider) {
@@ -101,6 +113,7 @@
     if (item.gelatoProductUid) out.gelatoProductUid = item.gelatoProductUid;
     if (item.printfulSyncVariantId) out.printfulSyncVariantId = String(item.printfulSyncVariantId);
     if (item.printfulVariantId) out.printfulVariantId = String(item.printfulVariantId);
+    if (item.printfulSource) out.printfulSource = String(item.printfulSource);
     if (provider === "cj" && rawId) out.cjPid = rawId;
     if (item.quote) out.quote = String(item.quote);
     return out;
@@ -121,7 +134,7 @@
 
   async function loadApiProducts(endpoint) {
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), 20000);
+    const timer = setTimeout(() => timeout.abort(), SOURCE_TIMEOUT_MS);
     try {
       const response = await fetch(endpoint, { signal: timeout.signal, cache: "no-store" });
       if (!response.ok) return [];
@@ -146,7 +159,7 @@
   async function loadCjSelected(config) {
     const allowed = cjAllowed(config);
     const timeout = new AbortController();
-    const timer = setTimeout(() => timeout.abort(), 28000);
+    const timer = setTimeout(() => timeout.abort(), SOURCE_TIMEOUT_MS);
     try {
       const url = ENDPOINTS.cj + "?q=" + encodeURIComponent(config.query || "");
       const response = await fetch(url, { signal: timeout.signal, cache: "no-store" });
@@ -208,22 +221,8 @@
     return localItems.map((item, index) => curated(item, index, category, provider)).filter(item => item.base > 0).slice(0, 50);
   }
 
-  function decorateProductCards(provider) {
-    const color = BRAND_COLORS[provider] || "#334155";
-    const label = LABELS[provider] || provider;
-    document.querySelectorAll("[data-product-card], .product-card, .card, article.product").forEach((card) => {
-      if (card.querySelector("[data-provider-badge]")) return;
-      const badge = document.createElement("span");
-      badge.dataset.providerBadge = provider;
-      badge.textContent = label;
-      badge.style.cssText = "display:inline-block;margin:6px 0 0;padding:3px 8px;border-radius:999px;font:700 10px/1 Inter,Arial,sans-serif;letter-spacing:.02em;color:#fff;background:" + color;
-      const title = card.querySelector("h3,h4,.title,.name") || card;
-      title.appendChild(badge);
-    });
-  }
-
-  /* The grid shows one supplier, but the cart may hold items from several. Cart rendering looks items up
-     with list.find(), so find() on the active list also searches the other supplier catalogs. */
+  /* Cart rendering looks items up with list.find(), so find() on the storefront list also searches every
+     supplier catalog (e.g. items restored from a saved cart that are de-duplicated out of the grid). */
   function withCrossCatalogFind(list, mapper) {
     const all = Object.keys(window.nordicCatalogs || {}).flatMap(k => Array.isArray(window.nordicCatalogs[k]) ? window.nordicCatalogs[k] : []);
     const pool = mapper ? all.map(mapper) : all;
@@ -234,10 +233,46 @@
     return list;
   }
 
-  function applyActiveCatalog(supplier) {
-    const key = LABELS[supplier] ? supplier : "cj";
-    window.nordicActiveSupplier = key;
-    const list = withCrossCatalogFind((window.nordicCatalogs[key] || []).slice());
+  function catLabel(item, provider, cfg) {
+    const raw = String(item.cat || "").trim();
+    const key = raw.toLowerCase();
+    if (cfg.catMap && cfg.catMap[key]) return cfg.catMap[key];
+    /* CJ "category" is only the store sector / search word (e.g. "beauty"): use the store's own category name. */
+    if (provider === "cj" || !key || key === String(cfg.query || "").toLowerCase() || key === podQuery(cfg.query)) return cfg.category || raw;
+    return CAT_NB[key] || raw;
+  }
+
+  /* Storefront rules (per store via config): only items with an image, no blank Printful catalog items
+     (no design files), no names matching config.exclude (off-topic / store-logo merch). */
+  function storefrontItem(cfg) {
+    const rx = cfg.exclude ? new RegExp(cfg.exclude, "i") : null;
+    return item => Boolean(item && item.image) &&
+      !(item.provider === "printful" && item.printfulSource !== "store") &&
+      !(rx && rx.test(String(item.name || "")));
+  }
+
+  function nameKey(name) {
+    return String(name || "").toLowerCase().replace(/\s+/g, " ").trim();
+  }
+
+  /** One grid with every supplier (fixed order), identical names shown once (first one wins). */
+  function storefrontList() {
+    const seen = new Set();
+    const out = [];
+    SOURCE_ORDER.forEach(key => {
+      (window.nordicCatalogs[key] || []).forEach(item => {
+        const k = nameKey(item.name);
+        if (!k || seen.has(k)) return;
+        seen.add(k);
+        out.push(item);
+      });
+    });
+    return out;
+  }
+
+  function applyStorefront() {
+    const list = withCrossCatalogFind(storefrontList());
+    window.nordicActiveSupplier = "all";
     if (typeof products !== "undefined") {
       try { products = list; } catch (_) { window.products = list; }
     } else {
@@ -245,93 +280,57 @@
     }
     if (typeof data !== "undefined") {
       try {
-        const toData = x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider || key, brand: x.brand || LABELS[x.provider] || LABELS[key] });
+        const toData = x => ({ id: x.id, n: x.name, c: x.cat, p: x.base, image: x.image, sku: x.sku, provider: x.provider, brand: x.brand });
         data = withCrossCatalogFind(list.map(toData), toData);
       } catch (_) {}
     }
-    if (typeof filter !== "undefined") { try { filter = "All"; } catch (_) {} }
-    if (typeof f !== "undefined") { try { f = "All"; } catch (_) {} }
+    /* Keep the customer's chosen category filter while more products arrive (reset only if it no longer exists). */
+    const cats = new Set(list.map(x => x.cat));
+    if (typeof filter !== "undefined") { try { if (filter !== "All" && filter !== "Todos" && !cats.has(filter)) filter = "All"; } catch (_) {} }
+    if (typeof f !== "undefined") { try { if (f !== "All" && !cats.has(f)) f = "All"; } catch (_) {} }
     if (typeof renderFilters === "function") renderFilters();
     else if (typeof rf === "function") rf();
     if (typeof renderProducts === "function") renderProducts();
     else if (typeof rp === "function") rp();
     if (typeof renderCart === "function") renderCart();
     else if (typeof rc === "function") rc();
-    document.querySelectorAll("[data-supplier-switch]").forEach(btn => {
-      const active = btn.getAttribute("data-supplier-switch") === key;
-      btn.classList.toggle("active", active);
-      btn.setAttribute("aria-pressed", active ? "true" : "false");
-      if (active) {
-        btn.style.outline = "2px solid " + (BRAND_COLORS[key] || "#fff");
-        btn.style.background = BRAND_COLORS[key] || "";
-        btn.style.color = "#fff";
-      } else {
-        btn.style.outline = "";
-        btn.style.background = "";
-        btn.style.color = "";
-      }
-    });
-    const count = list.length;
-    setStatus(LABELS[key] + " · " + count + " productos", count > 0);
-    setTimeout(() => decorateProductCards(key), 50);
+    /* Re-apply a chosen sort order (commerce-runtime.js) to the appended products. */
+    const sort = document.getElementById("nordicProductSort");
+    if (sort && sort.value && sort.value !== "featured") sort.dispatchEvent(new Event("change"));
+    setStatus("all · " + list.length, list.length > 0);
     return list;
   }
 
-  function mountSwitcher() {
-    if (document.querySelector("[data-supplier-switcher]")) return;
-    const bar = document.createElement("div");
-    bar.dataset.supplierSwitcher = "";
-    bar.setAttribute("role", "tablist");
-    bar.setAttribute("aria-label", "Supplier catalog");
-    bar.style.cssText = "display:flex;flex-wrap:wrap;gap:8px;padding:10px 5%;position:sticky;top:64px;z-index:20;background:rgba(7,9,13,.92);backdrop-filter:blur(10px);border-bottom:1px solid #1c2633";
-    Object.keys(LABELS).forEach(key => {
-      const btn = document.createElement("button");
-      btn.type = "button";
-      btn.className = "chip" + (key === "cj" ? " active" : "");
-      btn.dataset.supplierSwitch = key;
-      btn.textContent = LABELS[key];
-      btn.title = LABELS[key] + " catalog";
-      btn.setAttribute("aria-pressed", key === "cj" ? "true" : "false");
-      btn.onclick = () => applyActiveCatalog(key);
-      bar.appendChild(btn);
-    });
-    const shop = document.getElementById("shop") || document.getElementById("products");
-    if (shop && shop.parentNode) shop.parentNode.insertBefore(bar, shop);
-    else document.body.insertBefore(bar, document.body.firstChild);
-  }
-
-  window.setNordicSupplier = applyActiveCatalog;
+  window.setNordicSupplier = function () { return applyStorefront(); };
 
   window.loadNordicCatalog = async function (config) {
     const cfg = config || {};
     const category = cfg.category || "General";
     const query = cfg.query || "";
-    const [cj, printify, gelato, printful] = await Promise.all([
-      loadCjSelected(cfg),
-      loadPodCatalog("printify", category, query),
-      loadPodCatalog("gelato", category, query),
-      loadPodCatalog("printful", category, query)
-    ]);
-    window.nordicCatalogs = { cj, printify, gelato, printful };
-    mountSwitcher();
-    const first = ["cj", "printify", "gelato", "printful"].find(k => window.nordicCatalogs[k].length) || "cj";
-    const active = applyActiveCatalog(first);
-    if (!cj.length && !printify.length && !gelato.length && !printful.length) {
-      setStatus("Catálogo local · proveedores en espera", false);
-      return [];
-    }
+    const keep = storefrontItem(cfg);
+    const loaders = {
+      cj: cfg.cj === false ? Promise.resolve([]) : loadCjSelected(cfg), // store opted out of CJ: no request
+      printify: loadPodCatalog("printify", category, query),
+      gelato: loadPodCatalog("gelato", category, query),
+      printful: loadPodCatalog("printful", category, query)
+    };
+    window.nordicCatalogs = { cj: [], printify: [], gelato: [], printful: [] };
+    /* Render each supplier as soon as it answers (or falls back after SOURCE_TIMEOUT_MS). */
+    await Promise.allSettled(SOURCE_ORDER.map(key => loaders[key]
+      .catch(() => [])
+      .then(list => {
+        window.nordicCatalogs[key] = (Array.isArray(list) ? list : [])
+          .map(item => { const cat = catLabel(item, key, cfg); return { ...item, cat, tag: cat }; })
+          .filter(keep);
+        applyStorefront();
+      })));
+    const active = applyStorefront();
+    window.nordicCatalogReady = true;
+    try { window.dispatchEvent(new Event("nordic:catalog-ready")); } catch (_) {}
+    if (!active.length) setStatus("local catalog, suppliers pending", false);
     return active;
   };
 
-  window.showGermanDropStatus = function (enabled) {
-    if (!enabled) return;
-    const note = document.createElement("meta");
-    note.name = "nordic-german-drop";
-    note.content = "authorized-manual-catalog";
-    document.head.appendChild(note);
-    const badge = document.createElement("div");
-    badge.textContent = "German Drop · abastecimiento activo";
-    badge.style.cssText = "position:fixed;left:14px;bottom:52px;z-index:25;padding:7px 11px;border-radius:999px;background:#fff;border:1px solid #d8dee8;box-shadow:0 4px 18px #0002;font:700 11px/1.2 Inter,Arial,sans-serif;color:#334155";
-    document.body.appendChild(badge);
-  };
+  /* Kept for compatibility with older pages; supplier sourcing status is internal and no longer shown. */
+  window.showGermanDropStatus = function () {};
 })();

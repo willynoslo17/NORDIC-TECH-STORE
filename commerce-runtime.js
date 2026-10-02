@@ -78,7 +78,7 @@
     document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="nordicInfo"><section class="nordic-info-card"><button type="button" id="nordicInfoClose">Lukk</button><div id="nordicInfoBody"></div></section></div>');
     /* Legal links, seller identity and address are rendered statically in the footer (see /kjopsvilkar etc.). */
     const footer = document.querySelector("footer") || document.body;
-    footer.insertAdjacentHTML("beforeend", '<div class="nordic-info-links"><button type="button" data-info="orders">Ordrestatus / Order status</button></div>');
+    footer.insertAdjacentHTML("beforeend", '<div class="nordic-info-links"><button type="button" data-info="orders">Ordrestatus</button></div>');
     document.getElementById("nordicInfoClose").onclick = closeInfo;
     document.getElementById("nordicInfo").onclick = event => { if (event.target.id === "nordicInfo") closeInfo(); };
   }
@@ -131,7 +131,7 @@
       const notice = document.createElement("p");
       notice.id = "nordicPriceNotice";
       notice.style.cssText = "font-size:12px;line-height:1.5;opacity:.72;margin:0 0 14px";
-      notice.innerHTML = 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre (Norge) · €7,90 (EU) · S/ 14 (Peru). Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">14 dagers angrerett</a>. <span lang="en">Prices include 25% VAT; shipping NOK 79 per order.</span>';
+      notice.innerHTML = 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre (Norge) · €7,90 (EU) · S/ 14 (Peru). Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">14 dagers angrerett</a>.';
       grid.parentNode.insertBefore(notice, grid);
     }
     const schema = document.createElement("script");
@@ -220,19 +220,16 @@
     };
   }
 
-  function ensureNetlifyForm() {
-    if (document.querySelector('form[name="nordic-order"]')) return;
-    document.body.insertAdjacentHTML("beforeend", '<form name="nordic-order" data-netlify="true" netlify-honeypot="bot-field" hidden><input name="bot-field"><input name="store"><input name="order_id"><input name="market"><input name="name"><input name="email"><input name="phone"><input name="city"><input name="address"><input name="country"><textarea name="items"></textarea><input name="consent"></form>');
-  }
-
   function restoreCart() {
     const saved = read(CART_KEY, {});
-    const valid = {};
+    /* Products now appear before this runs, so keep anything already added in this visit. */
+    const valid = { ...cartObject() };
     Object.entries(saved).forEach(([id, quantity]) => {
-      if (productById(id) && Number(quantity) > 0) valid[id] = Math.min(99, Number(quantity));
+      if (valid[id] == null && productById(id) && Number(quantity) > 0) valid[id] = Math.min(99, Number(quantity));
     });
     setCartObject(valid);
     redrawCart();
+    write(CART_KEY, valid);
   }
 
   function init() {
@@ -241,7 +238,6 @@
     addPolicies();
     addCatalogTools();
     addTrustAndSeo();
-    ensureNetlifyForm();
     enhanceCheckout();
     restoreCart();
     document.addEventListener("click", event => {
@@ -254,5 +250,10 @@
   }
 
   window.NordicCommerce = { init };
-  setTimeout(init, 8000);
+  /* Start once every supplier catalog has answered or timed out (supplier-bridge.js), at the latest after 12 s. */
+  if (window.nordicCatalogReady) setTimeout(init, 0);
+  else {
+    window.addEventListener("nordic:catalog-ready", () => setTimeout(init, 0), { once: true });
+    setTimeout(init, 12000);
+  }
 })();
