@@ -1,0 +1,34 @@
+{
+  "categories": [
+    {
+      "no": "Smarthjemstyring",
+      "es": "Control del hogar inteligente",
+      "intro_no": "Når du velger smarthjemstyring, bør du først kontrollere hvilke enheter og systemer du ønsker å koble sammen. Sammenlign modell, protokoll og kompatibilitet oppgitt på siden med behovene dine, og vurder om kravene samsvarer med utstyret og nettverket du allerede har. Se etter opplysninger om app, hub eller systemkrav dersom de er oppgitt og bruksinstruksjoner på produktsiden. Tenk gjennom hvor og hvordan produktet skal brukes; mål, materialer og kompatibilitet kan påvirke valget. Hvis en viktig opplysning mangler, kontakt butikken før du bestiller.",
+      "intro_es": "Al elegir control del hogar inteligente, revisa qué dispositivos y sistemas quieres conectar. Compara el modelo, el protocolo y la compatibilidad indicados con lo que necesitas y considera si los requisitos coinciden con tus dispositivos y red. Comprueba la aplicación, el hub o los requisitos indicados. Las medidas, los materiales y la compatibilidad influyen en la elección. Si falta un dato importante, contacta con la tienda antes de comprar."
+    },
+    {
+      "no": "Sensorer og varsling",
+      "es": "Sensores y alertas",
+      "intro_no": "Når du velger sensorer og varsling, bør du først kontrollere hvor sensoren skal plasseres og hva den skal registrere. Sammenlign måleområde, tilkobling og systemkrav som er oppgitt med behovene dine, og vurder om sensorens funksjon passer til formålet ditt. Se etter opplysninger om kompatibilitet, oppsett og varslingstyper og bruksinstruksjoner på produktsiden. Tenk gjennom hvor og hvordan produktet skal brukes; mål, materialer og kompatibilitet kan påvirke valget. Hvis en viktig opplysning mangler, kontakt butikken før du bestiller.",
+      "intro_es": "Al elegir sensores y alertas, revisa dónde ubicarás el sensor y qué debe detectar. Compara el alcance, la conexión y los requisitos del sistema indicados con lo que necesitas y considera si la función del sensor corresponde a lo que necesitas. Comprueba la compatibilidad, la configuración y los tipos de alerta. Las medidas, los materiales y la compatibilidad influyen en la elección. Si falta un dato importante, contacta con la tienda antes de comprar."
+    },
+    {
+      "no": "Smart belysning",
+      "es": "Iluminación inteligente",
+      "intro_no": "Når du velger smart belysning, bør du først kontrollere lyskildetype, sokkel og styringsmåte som passer hjemme. Sammenlign mål, tilkobling og kompatibilitetsopplysninger med behovene dine, og vurder om belysningen kan brukes med styringssystemet ditt. Se etter opplysninger om appkrav, lysfunksjoner og installasjonsinformasjon og bruksinstruksjoner på produktsiden. Tenk gjennom hvor og hvordan produktet skal brukes; mål, materialer og kompatibilitet kan påvirke valget. Hvis en viktig opplysning mangler, kontakt butikken før du bestiller.",
+      "intro_es": "Al elegir iluminación inteligente, revisa el tipo de luz, la base y el control que tienes en casa. Compara las medidas, la conexión y los datos de compatibilidad con lo que necesitas y considera si la iluminación funciona con tu sistema de control. Comprueba los requisitos de la aplicación, funciones y datos de instalación. Las medidas, los materiales y la compatibilidad influyen en la elección. Si falta un dato importante, contacta con la tienda antes de comprar."
+    },
+    {
+      "no": "Nettverk og tilkobling",
+      "es": "Redes y conectividad",
+      "intro_no": "Når du velger nettverk og tilkobling, bør du først kontrollere nettverkstypen og enhetene som skal kobles til. Sammenlign oppgitte frekvensbånd, porter og systemkrav med behovene dine, og vurder om produktet passer til oppsettet du bruker. Se etter opplysninger om kompatibilitetsliste og nettverksinstruksjoner og bruksinstruksjoner på produktsiden. Tenk gjennom hvor og hvordan produktet skal brukes; mål, materialer og kompatibilitet kan påvirke valget. Hvis en viktig opplysning mangler, kontakt butikken før du bestiller.",
+      "intro_es": "Al elegir redes y conectividad, revisa el tipo de red y los dispositivos que conectarás. Compara las bandas, los puertos y los requisitos del sistema indicados con lo que necesitas y considera si el producto se adapta a tu configuración. Comprueba la lista de compatibilidad y las instrucciones de red. Las medidas, los materiales y la compatibilidad influyen en la elección. Si falta un dato importante, contacta con la tienda antes de comprar."
+    },
+    {
+      "no": "Smarthjemtilbehør",
+      "es": "Accesorios para el hogar inteligente",
+      "intro_no": "Når du velger smarthjemtilbehør, bør du først kontrollere hvilken hovedenhet eller løsning tilbehøret skal brukes med. Sammenlign modellreferanse, tilkobling og kompatibilitet med behovene dine, og vurder om tilbehøret støttes av systemet du har. Se etter opplysninger om oppsett, funksjoner og eventuelle krav og bruksinstruksjoner på produktsiden. Tenk gjennom hvor og hvordan produktet skal brukes; mål, materialer og kompatibilitet kan påvirke valget. Hvis en viktig opplysning mangler, kontakt butikken før du bestiller.",
+      "intro_es": "Al elegir accesorios para el hogar inteligente, revisa con qué dispositivo o sistema usarás el accesorio. Compara la referencia del modelo, la conexión y la compatibilidad con lo que necesitas y considera si el accesorio es compatible con el sistema que tienes. Comprueba la configuración, las funciones y los requisitos indicados. Las medidas, los materiales y la compatibilidad influyen en la elección. Si falta un dato importante, contacta con la tienda antes de comprar."
+    }
+  ]
+}
