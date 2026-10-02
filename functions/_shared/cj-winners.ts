@@ -25,7 +25,7 @@ export type WinnerDeps = {
   apiKey: string;
   origin: string;
   sector: string;
-  getToken: (apiKey: string) => Promise<{ token: string; fresh: boolean }>;
+  getToken: (apiKey: string, forceNew?: boolean) => Promise<{ token: string; fresh: boolean }>;
   fetchPage: (token: string, keyword: string, page: number) => Promise<any>;
   flatten: (data: any) => any[];
   accept: (item: any) => boolean;
@@ -50,6 +50,7 @@ const CJ_GAP_MS = 1100;
 type Entry = { at: number; rows: any[] };
 const memory = new Map<string, Entry>();
 let refreshing: Promise<void> | null = null;
+let lastError = "";
 
 function sleep(ms: number) {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -93,18 +94,32 @@ async function writeEntry(key: string, rows: any[]) {
 async function refresh(deps: WinnerDeps, keywords: string[]) {
   let auth = await deps.getToken(deps.apiKey);
   if (auth.fresh) await sleep(CJ_GAP_MS);
+  let renewed = auth.fresh;
   for (let i = 0; i < keywords.length; i++) {
     if (i) await sleep(CJ_GAP_MS);
     const keyword = keywords[i];
+    let data: any = null;
     try {
-      const data = await deps.fetchPage(auth.token, keyword, 1);
-      const rows = deps.flatten(data)
-        .filter((item) => item && item.id && item.bigImage && deps.accept(item))
-        .map((item, index) => ({ ...deps.toProduct(item, index, deps.sector), keyword }));
-      await writeEntry(keyUrl(deps.origin, deps.sector, keyword), rows);
-    } catch {
-      /* keep the previous copy; retried on a later request */
+      data = await deps.fetchPage(auth.token, keyword, 1);
+    } catch (error) {
+      lastError = String((error as any)?.message || error).slice(0, 160);
+      // The shared CJ account may have replaced this isolate's token: renew once and retry the keyword.
+      if (renewed) continue;
+      renewed = true;
+      try {
+        await sleep(CJ_GAP_MS);
+        auth = await deps.getToken(deps.apiKey, true);
+        await sleep(CJ_GAP_MS);
+        data = await deps.fetchPage(auth.token, keyword, 1);
+      } catch (retryError) {
+        lastError = String((retryError as any)?.message || retryError).slice(0, 160);
+        continue;
+      }
     }
+    const rows = deps.flatten(data)
+      .filter((item) => item && item.id && item.bigImage && deps.accept(item))
+      .map((item, index) => ({ ...deps.toProduct(item, index, deps.sector), keyword }));
+    await writeEntry(keyUrl(deps.origin, deps.sector, keyword), rows);
   }
 }
 
@@ -134,7 +149,9 @@ export async function winnerRows(deps: WinnerDeps, mode: "grid" | "review", skip
     }
   }
   if (stale.length && !refreshing) {
-    refreshing = refresh(deps, stale.slice(0, KEYWORDS_PER_REFRESH)).catch(() => {}).finally(() => { refreshing = null; });
+    refreshing = refresh(deps, stale.slice(0, KEYWORDS_PER_REFRESH))
+      .catch((error) => { lastError = String((error as any)?.message || error).slice(0, 160); })
+      .finally(() => { refreshing = null; });
     if (deps.waitUntil) deps.waitUntil(refreshing);
   }
   if (mode === "review") return Array.from(byId.values()).filter(eligible).map((row) => ({ ...row, vetted: PID_SET.has(String(row.id)) }));
@@ -148,5 +165,5 @@ export async function winnerRows(deps: WinnerDeps, mode: "grid" | "review", skip
 
 /** Keyword refresh status for the review list. */
 export function winnersStatus() {
-  return { keywords: KEYWORDS.length, vetted: PID_SET.size, refreshing: Boolean(refreshing) };
+  return { keywords: KEYWORDS.length, vetted: PID_SET.size, refreshing: Boolean(refreshing), lastError };
 }

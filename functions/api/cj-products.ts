@@ -1,6 +1,6 @@
 import { withQuotes } from "../_shared/quote";
 import { retailNok } from "../_shared/pricing";
-import { winnerRows, WINNERS_ONLY, type WinnerDeps } from "../_shared/cj-winners";
+import { winnerRows, winnersStatus, WINNERS_ONLY, type WinnerDeps } from "../_shared/cj-winners";
 /** Response fields that may be public. The cached payload keeps raw CJ rows (data.content, costs) server-side only. */
 const PUBLIC_KEYS = ["ok", "supplier", "sector", "query", "page", "markets", "storefrontCap", "count", "source"];
 function publicPayload(payload: any, products: any[]) {
@@ -439,7 +439,7 @@ function winnerDeps(context: any, origin: string): WinnerDeps {
     apiKey: String(context.env.CJ_API_KEY || ""),
     origin,
     sector: PROFILE.sector,
-    getToken: (key) => getToken(key),
+    getToken: (key, forceNew) => getToken(key, forceNew),
     fetchPage: (token, keyword, page) => fetchPage(token, keyword, page),
     flatten,
     accept: (item) => {
@@ -480,6 +480,7 @@ export async function onRequestGet(context: any) {
         source: "cj-winners-review",
         count: rows.length,
         keywordsCached: new Set(rows.map((row) => row.keyword)).size,
+        status: winnersStatus(),
         products: rows.map((row) => ({
           id: row.id, sku: row.sku, name: row.name, image: row.image, priceNok: retailNok("cj", row),
           listedNum: row.listedNum, warehouseInventoryNum: row.warehouseInventoryNum, keyword: row.keyword, vetted: row.vetted,
