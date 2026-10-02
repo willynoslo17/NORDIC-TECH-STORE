@@ -6,12 +6,13 @@
  *                     and reports template IDs, the newsletter list and whether the Stripe webhook endpoint for this
  *                     domain is subscribed to checkout.session.expired (needed for abandoned-cart e-mails).
  * POST { action: "test", token, to, keys? } -> sends "[TEST]" copies to one address. Only with the owner's test token
+ *                     { action: "scheduled", token, to } -> status of the welcome/cart mails scheduled for that address.
  *                     (only its SHA-256 is stored here). Never used for customers.
  * The Brevo API key is never logged or returned.
  */
 import { STORE } from "../_shared/store";
 import { MARKETING_TEMPLATES, MARKETING_VERSION } from "../_shared/marketing-templates";
-import { ensureSetup, sendTemplate, unsubscribeUrl, utcDay, LIST_NAME, SENDER, SHOP_URL, BrevoError, type MktEnv } from "../_shared/brevo-marketing";
+import { ensureSetup, sendTemplate, unsubscribeUrl, utcDay, lastDays, batchId, brevo, LIST_NAME, SENDER, SHOP_URL, BrevoError, type MktEnv } from "../_shared/brevo-marketing";
 
 const TEST_TOKEN_SHA256 = "768b08e53ea9c9608fbbe6f9952d65a1369198b83791d3e0f7ec584f8d22f092";
 const EMAIL = /^[^\s@<>()[\]\\,;:"]{1,64}@[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?)+$/;
@@ -25,9 +26,12 @@ async function stripeWebhookStatus(env: MktEnv) {
     const response = await fetch("https://api.stripe.com/v1/webhook_endpoints?limit=100", { headers: { authorization: `Bearer ${env.STRIPE_SECRET_KEY}` }, signal: AbortSignal.timeout(10000) });
     if (!response.ok) return { checked: false, status: response.status };
     const data = (await response.json()) as { data?: Array<{ url?: string; status?: string; enabled_events?: string[] }> };
-    const mine = (data.data || []).filter((w) => String(w.url || "").includes(`${STORE.domain}/api/stripe-webhook`));
+    const all = data.data || [];
+    // This store's endpoint(s): custom domain or the Pages project (<slug>.pages.dev); other stores' endpoints are not listed.
+    const mine = all.filter((w) => { const u = String(w.url || "").toLowerCase(); return u.includes("/api/stripe-webhook") && (u.includes(STORE.domain) || u.includes(STORE.slug)); });
     const has = (event: string) => mine.some((w) => w.status !== "disabled" && (w.enabled_events || []).some((e) => e === event || e === "*"));
-    return { checked: true, endpoints: mine.length, completed: has("checkout.session.completed"), expired: has("checkout.session.expired") };
+    return { checked: true, accountEndpoints: all.length, endpoints: mine.map((w) => ({ host: (() => { try { return new URL(String(w.url)).host; } catch { return ""; } })(), status: w.status })),
+      completed: has("checkout.session.completed"), expired: has("checkout.session.expired") };
   } catch { return { checked: false }; }
 }
 
@@ -62,9 +66,19 @@ export async function onRequestPost(context: { request: Request; env: MktEnv }) 
   if (!env.BREVO_API_KEY) return reply({ ok: false, error: "Not configured" }, 503);
   let body: any;
   try { body = await request.json(); } catch { return reply({ ok: false, error: "Invalid JSON" }, 400); }
-  if (body?.action !== "test" || typeof body?.token !== "string" || (await sha256(body.token)) !== TEST_TOKEN_SHA256) return reply({ ok: false, error: "Forbidden" }, 403);
+  if (!["test", "scheduled"].includes(body?.action) || typeof body?.token !== "string" || (await sha256(body.token)) !== TEST_TOKEN_SHA256) return reply({ ok: false, error: "Forbidden" }, 403);
   const to = String(body?.to || "").trim().toLowerCase();
   if (!EMAIL.test(to)) return reply({ ok: false, error: "Invalid email" }, 400);
+  if (body.action === "scheduled") {
+    const out: Record<string, unknown> = {};
+    for (const day of lastDays(4)) for (const key of ["welcome-2", "welcome-3", "cart-2", "cart-3"]) {
+      try {
+        const s = await brevo(env, "GET", `/smtp/emailStatus/${await batchId(env, to, key, day)}`);
+        out[`${day}:${key}`] = (s?.batches || []).map((b: any) => ({ status: b?.status, scheduledAt: b?.scheduledAt }));
+      } catch (error) { if (!(error instanceof BrevoError && error.status === 404)) out[`${day}:${key}`] = { error: (error as Error).message }; }
+    }
+    return reply({ ok: true, scheduled: out });
+  }
   const keys: string[] = Array.isArray(body?.keys) && body.keys.length ? body.keys.map(String) : MARKETING_TEMPLATES.map((t) => t.key);
   const setup = await ensureSetup(env, new URL(request.url).origin);
   const params = {
