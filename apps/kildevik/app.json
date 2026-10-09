@@ -1,0 +1,78 @@
+{
+  "expo": {
+    "name": "Kildevik",
+    "slug": "kildevik",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "scheme": "kildevik",
+    "userInterfaceStyle": "automatic",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#194F3D"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "no.mlinternasjonal.kildevik",
+      "buildNumber": "1",
+      "infoPlist": {
+        "CFBundleAllowMixedLocalizations": true,
+        "ITSAppUsesNonExemptEncryption": false
+      },
+      "privacyManifests": {
+        "NSPrivacyAccessedAPITypes": [
+          {
+            "NSPrivacyAccessedAPIType": "NSPrivacyAccessedAPICategoryUserDefaults",
+            "NSPrivacyAccessedAPITypeReasons": [
+              "CA92.1"
+            ]
+          }
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#194F3D"
+      },
+      "package": "no.mlinternasjonal.kildevik",
+      "versionCode": 1,
+      "permissions": []
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "static",
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-localization",
+      "expo-secure-store",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "backgroundColor": "#194F3D",
+          "imageWidth": 200
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": true
+    },
+    "extra": {
+      "appId": "kildevik",
+      "paymentsBaseUrl": "",
+      "aiWebhookUrl": "",
+      "privacyUrl": "https://apps.mlinternasjonal.no/kildevik/privacy/",
+      "supportUrl": "https://apps.mlinternasjonal.no/",
+      "termsUrl": "https://apps.mlinternasjonal.no/kildevik/terms/",
+      "pricingUrl": "https://apps.mlinternasjonal.no/kildevik/#pricing"
+    },
+    "runtimeVersion": {
+      "policy": "appVersion"
+    }
+  }
+}
