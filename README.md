@@ -23,6 +23,10 @@ The store has its own `/api/cj-products` catalog endpoint and a validated `/api/
 
 The storefront remains in non-charging request mode until supplier stock, landed cost, delivery time, product compliance and a payment provider are verified. Before enabling payment for a SKU, record its manufacturer, responsible economic operator, safety warnings, destination availability, current shipping quote, VAT treatment and return address.
 
+**Checkout is paused:** `CHECKOUT_ENABLED=false` → `/api/create-checkout-session` returns **503** («opens soon» / «Nettbutikken åpner snart»). Do not invent `CJ_API_KEY`, `DROPI_API_TOKEN`, `BIGBUY_API_TOKEN`, `SYNCEE_API_KEY` or `DSERS_API_KEY`.
+
+**SKUs not chargeable yet** (stock / landed cost / fulfillment gaps): see [`SKU-CHARGEABILITY.md`](./SKU-CHARGEABILITY.md). Chargeable count today: **0**.
+
 ## Separate supplier catalogs (no blend)
 
 - Storefront switcher: **CJ | Printify | Gelato | Printful** — `window.nordicCatalogs` keeps arrays separate; default UI shows CJ only.
