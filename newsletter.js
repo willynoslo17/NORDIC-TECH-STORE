@@ -6,15 +6,13 @@
   if (!form) return;
   const fields = form.querySelector("fieldset");
   const status = form.querySelector(".ml-nl-status");
-  function say(nb, es) {
-    status.innerHTML = "";
-    status.appendChild(document.createTextNode(nb + " "));
-    if (es) { const span = document.createElement("span"); span.lang = "es"; span.textContent = es; status.appendChild(span); }
+  function say(nb) {
+    status.textContent = nb;
   }
   function disable() {
     fields.disabled = true;
     form.dataset.state = "disabled";
-    say("Påmelding til nyhetsbrevet åpner snart.", "La suscripción al boletín abrirá pronto.");
+    say("Påmelding til nyhetsbrevet åpner snart.");
   }
   fetch("/api/newsletter", { cache: "no-store" })
     .then(r => (r.ok ? r.json() : null))
@@ -27,10 +25,10 @@
     event.preventDefault();
     if (form.dataset.state !== "ready") return;
     const email = String(form.elements.email.value || "").trim();
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say("Skriv inn en gyldig e-postadresse.", "Escribe una dirección de correo válida."); return; }
-    if (!form.elements.consent.checked) { say("Kryss av i samtykkefeltet for å melde deg på.", "Marca la casilla de consentimiento para suscribirte."); return; }
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { say("Skriv inn en gyldig e-postadresse."); return; }
+    if (!form.elements.consent.checked) { say("Kryss av i samtykkefeltet for å melde deg på."); return; }
     fields.disabled = true;
-    say("Sender …", "Enviando…");
+    say("Sender …");
     try {
       const response = await fetch("/api/newsletter", {
         method: "POST",
@@ -39,17 +37,16 @@
       });
       if (response.ok) {
         form.reset();
-        say("Takk! Sjekk e-posten din og bekreft påmeldingen. Du blir ikke lagt til før du har bekreftet.",
-            "¡Gracias! Revisa tu correo y confirma la suscripción. No te añadiremos hasta que la confirmes.");
+        say("Takk! Sjekk e-posten din og bekreft påmeldingen. Du blir ikke lagt til før du har bekreftet.");
       } else if (response.status === 429) {
-        say("For mange forsøk. Prøv igjen om noen minutter.", "Demasiados intentos. Inténtalo de nuevo en unos minutos.");
+        say("For mange forsøk. Prøv igjen om noen minutter.");
       } else if (response.status === 400) {
-        say("Sjekk e-postadressen og samtykket.", "Revisa la dirección de correo y el consentimiento.");
+        say("Sjekk e-postadressen og samtykket.");
       } else {
-        say("Påmeldingen er ikke tilgjengelig akkurat nå. Prøv igjen senere.", "La suscripción no está disponible ahora mismo. Inténtalo más tarde.");
+        say("Påmeldingen er ikke tilgjengelig akkurat nå. Prøv igjen senere.");
       }
     } catch (_) {
-      say("Påmeldingen er ikke tilgjengelig akkurat nå. Prøv igjen senere.", "La suscripción no está disponible ahora mismo. Inténtalo más tarde.");
+      say("Påmeldingen er ikke tilgjengelig akkurat nå. Prøv igjen senere.");
     }
     fields.disabled = false;
   });
