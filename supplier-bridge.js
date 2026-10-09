@@ -31,12 +31,13 @@
     const key = String(q || "").toLowerCase();
     return POD_QUERY_ALIAS[key] || key;
   }
+  /* Absolute paths so /pe/ (and other subfolders) resolve the same public catalog files. */
   const LOCAL_FILES = {
-    cj: "catalog/selected-products.json",
-    printify: "catalog/printify-selected.json",
-    printifyFallback: "catalog/printify-products.json",
-    gelato: "catalog/gelato-products.json",
-    printful: "catalog/printful-products.json"
+    cj: "/catalog/selected-products.json",
+    printify: "/catalog/printify-selected.json",
+    printifyFallback: "/catalog/printify-products.json",
+    gelato: "/catalog/gelato-products.json",
+    printful: "/catalog/printful-products.json"
   };
   const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };

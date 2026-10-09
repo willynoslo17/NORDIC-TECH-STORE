@@ -98,11 +98,17 @@
   function addCatalogTools() {
     const grid = document.getElementById("products");
     if (!grid || document.getElementById("nordicCatalogTools")) return;
+    const pe = (document.documentElement.lang || "").toLowerCase().startsWith("es") ||
+      document.body?.dataset?.market === "PE" ||
+      document.body?.dataset?.store === "pe";
+    const L = pe
+      ? { search: "Buscar productos", sort: "Ordenar", featured: "Destacados", asc: "Precio: menor a mayor", desc: "Precio: mayor a menor", name: "Nombre", count: " productos" }
+      : { search: "Søk i produktene", sort: "Sorter produktene", featured: "Anbefalt", asc: "Pris: lav til høy", desc: "Pris: høy til lav", name: "Navn", count: " produkter" };
     const tools = document.createElement("div");
     tools.id = "nordicCatalogTools";
     tools.setAttribute("role", "search");
     tools.style.cssText = "display:flex;gap:10px;flex-wrap:wrap;margin:0 0 20px";
-    tools.innerHTML = '<input id="nordicProductSearch" type="search" autocomplete="off" aria-label="Søk i produktene" placeholder="Søk i produktene" style="flex:1;min-width:210px;padding:12px;border:1px solid #94a3b8;border-radius:8px"><select id="nordicProductSort" aria-label="Sorter produktene" style="padding:12px;border:1px solid #94a3b8;border-radius:8px"><option value="featured">Anbefalt</option><option value="price-asc">Pris: lav til høy</option><option value="price-desc">Pris: høy til lav</option><option value="name">Navn</option></select><span id="nordicResultCount" aria-live="polite" style="align-self:center;font-size:13px;opacity:.75"></span>';
+    tools.innerHTML = '<input id="nordicProductSearch" type="search" autocomplete="off" aria-label="'+L.search+'" placeholder="'+L.search+'" style="flex:1;min-width:210px;padding:12px;border:1px solid #94a3b8;border-radius:8px"><select id="nordicProductSort" aria-label="'+L.sort+'" style="padding:12px;border:1px solid #94a3b8;border-radius:8px"><option value="featured">'+L.featured+'</option><option value="price-asc">'+L.asc+'</option><option value="price-desc">'+L.desc+'</option><option value="name">'+L.name+'</option></select><span id="nordicResultCount" aria-live="polite" style="align-self:center;font-size:13px;opacity:.75"></span>';
     grid.parentNode.insertBefore(tools, grid);
     const search = document.getElementById("nordicProductSearch");
     const count = document.getElementById("nordicResultCount");
@@ -114,7 +120,7 @@
         card.style.display = show ? "" : "none";
         if (show) visible++;
       });
-      count.textContent = visible + " produkter";
+      count.textContent = visible + L.count;
     };
     search.addEventListener("input", applySearch);
     document.getElementById("nordicProductSort").addEventListener("change", event => {
@@ -140,10 +146,15 @@
     }
     const grid = document.getElementById("products");
     if (grid && !document.getElementById("nordicPriceNotice")) {
+      const pe = (document.documentElement.lang || "").toLowerCase().startsWith("es") ||
+        document.body?.dataset?.market === "PE" ||
+        document.body?.dataset?.store === "pe";
       const notice = document.createElement("p");
       notice.id = "nordicPriceNotice";
       notice.style.cssText = "font-size:12px;line-height:1.5;opacity:.72;margin:0 0 14px";
-      notice.innerHTML = 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre (Norge) · €7,90 (EU) · S/ 14 (Peru). Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">14 dagers angrerett</a>.';
+      notice.innerHTML = pe
+        ? 'Precios en PEN con IGV (18 %) incluido. Envío S/ 14 por pedido a todo el Perú. El total se muestra en el carrito. <a href="/pe/envios">Envíos</a> · <a href="/pe/cambios">Cambios y devoluciones</a>.'
+        : 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre (Norge) · €7,90 (EU) · S/ 14 (Peru). Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">14 dagers angrerett</a>.';
       grid.parentNode.insertBefore(notice, grid);
     }
     const schema = document.createElement("script");

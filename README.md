@@ -4,6 +4,10 @@ Storefront brand: **Novverk** · https://novverk.no/ · Novverk er et varemerke 
 
 Static international storefront for Norway, Europe and Peru, operated by ML Internasjonal Handel.
 
+## Peru channel (`/pe/`)
+
+Spanish storefront at https://novverk.no/pe/ (Lima look: mobile-first, high contrast). Legal pages: términos, privacidad, envíos, cambios, libro de reclamaciones (mailto `support@novverk.no`). Responsible seller: MARTINEZ LOZANO INTERNASJONAL HANDEL. Catalog is the static vetted CJ winners snapshot in `catalog/pe-cj-winners.json` (no live CJ API). Checkout stays off; Yape/Plin shown as «próximamente». The Norwegian storefront (`/`) keeps its existing look.
+
 ## Supplier integration layer
 
 `/api/supplier-route` exposes the first portable supplier-routing service. It selects an eligible offer using market, stock, landed cost, delivery window, margin, warehouse region, supplier priority and tracking availability.

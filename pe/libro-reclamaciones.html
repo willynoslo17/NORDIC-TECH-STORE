@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="es-PE">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Libro de Reclamaciones · Novverk Perú</title>
+<meta name="description" content="Libro de Reclamaciones virtual de Novverk Perú. Envía tu queja o reclamo a support@novverk.no.">
+<link rel="canonical" href="https://novverk.no/pe/libro-reclamaciones">
+<meta name="theme-color" content="#07090d">
+<link rel="stylesheet" href="/pe/legal.css">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/favicon.ico" sizes="any">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<meta property="og:title" content="Libro de Reclamaciones · Novverk Perú">
+<meta property="og:description" content="Libro de Reclamaciones virtual de Novverk Perú. Envía tu queja o reclamo a support@novverk.no.">
+<meta property="og:url" content="https://novverk.no/pe/libro-reclamaciones">
+<meta property="og:image" content="https://novverk.no/og-image.png">
+<meta name="twitter:card" content="summary_large_image">
+</head>
+<body class="pe-legal">
+<header class="lg-nav">
+  <a class="lg-brand" href="/pe/">Novverk <span>PE</span></a>
+  <label class="pe-region">Región
+    <select id="regionSwitch" aria-label="Región">
+      <option value="europa">Europa</option>
+      <option value="peru" selected>Perú</option>
+    </select>
+  </label>
+  <a class="lg-back" href="/pe/">← Volver a la tienda</a>
+</header>
+<main class="lg-main">
+<nav class="lg-toc" aria-label="Información legal Perú"><a href="/pe/terminos">Términos</a> <a href="/pe/privacidad">Privacidad</a> <a href="/pe/envios">Envíos</a> <a href="/pe/cambios">Cambios y devoluciones</a> <a href="/pe/libro-reclamaciones" aria-current="page">Libro de Reclamaciones</a></nav>
+<article lang="es">
+
+<h1>Libro de Reclamaciones</h1>
+<p class="pe-badge">Libro de Reclamaciones</p>
+<p class="lg-meta">Canal virtual Novverk Perú — https://novverk.no/pe/</p>
+<p><strong>Vendedor / proveedor:</strong> MARTINEZ LOZANO INTERNASJONAL HANDEL, empresa individual (ENK) registrada en Noruega, org.nr 935 407 095 MVA.<br>
+Domicilio: Norbygata 19, 0187 Oslo, Noruega<br>
+Correo: <a href="mailto:support@novverk.no">support@novverk.no</a> · Consultas: <a href="mailto:kontakt@novverk.no">kontakt@novverk.no</a><br>
+Teléfono / SMS / Telegram / Viber: <a href="tel:+4791290416">+47 912 90 416</a><br>
+Sitio: <a href="https://novverk.no/pe/">https://novverk.no/pe/</a></p>
+<p>Conforme a la normativa peruana de protección al consumidor, puedes registrar una <strong>queja</strong> (disconformidad no relacionada directamente con un producto/servicio) o un <strong>reclamo</strong> (disconformidad relacionada con un producto o servicio).</p>
+<p>Al enviar el formulario se abrirá tu correo con el mensaje dirigido a <a href="mailto:support@novverk.no">support@novverk.no</a>. Conserva una copia. Responderemos en un plazo máximo de <strong>15 días hábiles</strong>.</p>
+<form class="pe-form" id="libroForm">
+  <div class="pe-row">
+    <label>Tipo
+      <select name="tipo" required>
+        <option value="Reclamo">Reclamo</option>
+        <option value="Queja">Queja</option>
+      </select>
+    </label>
+    <label>Fecha del incidente
+      <input type="date" name="fecha" required>
+    </label>
+  </div>
+  <div class="pe-row">
+    <label>Nombre completo
+      <input name="nombre" required autocomplete="name" maxlength="120">
+    </label>
+    <label>Documento (DNI/CE/Pasaporte)
+      <input name="documento" required maxlength="40">
+    </label>
+  </div>
+  <div class="pe-row">
+    <label>Correo electrónico
+      <input type="email" name="email" required autocomplete="email" maxlength="254">
+    </label>
+    <label>Teléfono
+      <input name="telefono" required autocomplete="tel" maxlength="40">
+    </label>
+  </div>
+  <label>Domicilio
+    <input name="domicilio" required maxlength="200">
+  </label>
+  <div class="pe-row">
+    <label>Bien o servicio
+      <input name="bien" required maxlength="200" placeholder="Producto / pedido">
+    </label>
+    <label>Monto reclamado (PEN), si aplica
+      <input name="monto" inputmode="decimal" maxlength="40" placeholder="Ej. 149">
+    </label>
+  </div>
+  <label>Detalle de la queja o reclamo
+    <textarea name="detalle" required maxlength="4000"></textarea>
+  </label>
+  <label>Pedido concreto
+    <textarea name="pedido" required maxlength="2000" placeholder="Qué solicitas (cambio, devolución, respuesta, etc.)"></textarea>
+  </label>
+  <label><input type="checkbox" name="constancia" required> Declaro que la información es veraz y acepto recibir la constancia y respuesta en el correo indicado.</label>
+  <button type="submit">Enviar al correo de atención</button>
+</form>
+<p class="lg-meta">Proveedor: MARTINEZ LOZANO INTERNASJONAL HANDEL · Destinatario del formulario: support@novverk.no</p>
+<script>
+(function(){
+  const form = document.getElementById('libroForm');
+  form.addEventListener('submit', function(e){
+    e.preventDefault();
+    if (!form.reportValidity()) return;
+    const fd = new FormData(form);
+    const lines = [
+      'LIBRO DE RECLAMACIONES — Novverk Perú',
+      'Proveedor: MARTINEZ LOZANO INTERNASJONAL HANDEL (org.nr 935 407 095 MVA)',
+      'Canal: https://novverk.no/pe/',
+      '',
+      'Tipo: ' + fd.get('tipo'),
+      'Fecha incidente: ' + fd.get('fecha'),
+      'Nombre: ' + fd.get('nombre'),
+      'Documento: ' + fd.get('documento'),
+      'Email: ' + fd.get('email'),
+      'Teléfono: ' + fd.get('telefono'),
+      'Domicilio: ' + fd.get('domicilio'),
+      'Bien/servicio: ' + fd.get('bien'),
+      'Monto (PEN): ' + (fd.get('monto') || '—'),
+      '',
+      'Detalle:',
+      fd.get('detalle'),
+      '',
+      'Pedido del consumidor:',
+      fd.get('pedido')
+    ];
+    const subject = encodeURIComponent('[Libro de Reclamaciones] ' + fd.get('tipo') + ' — ' + fd.get('nombre'));
+    const body = encodeURIComponent(lines.join('\n'));
+    location.href = 'mailto:support@novverk.no?subject=' + subject + '&body=' + body;
+  });
+})();
+</script>
+</article>
+</main>
+<footer class="footer ml-legal-footer" lang="es">
+  <p><strong>Novverk Perú</strong> — canal de <strong>MARTINEZ LOZANO INTERNASJONAL HANDEL</strong>, ENK noruego, org.nr 935 407 095 MVA.</p>
+  <p>Norbygata 19, 0187 Oslo, Noruega · <a href="mailto:support@novverk.no">support@novverk.no</a> · <a href="mailto:kontakt@novverk.no">kontakt@novverk.no</a></p>
+  <nav class="ml-legal-links" aria-label="Información legal Perú">
+    <a href="/pe/terminos">Términos</a>
+    <a href="/pe/privacidad">Privacidad</a>
+    <a href="/pe/envios">Envíos</a>
+    <a href="/pe/cambios">Cambios y devoluciones</a>
+    <a href="/pe/libro-reclamaciones">Libro de Reclamaciones</a>
+    <a href="/pe/">Tienda Perú</a>
+    <a href="/">Tienda Europa</a>
+  </nav>
+  <p>Precios en PEN con IGV (18 %) incluido · Envío S/ 14 · Envío a todo el Perú</p>
+  <p>© 2026 Novverk</p>
+</footer>
+<script src="/region-switch.js"></script>
+</body>
+</html>

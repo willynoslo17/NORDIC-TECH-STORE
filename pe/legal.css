@@ -1,0 +1,112 @@
+/* Peru legal pages — builds on site legal.css with Spanish/PE chrome */
+@import url("https://fonts.googleapis.com/css2?family=Archivo+Black&family=Manrope:wght@400;600;700;800&display=swap");
+@import url("/legal.css");
+
+body.pe-legal {
+  --pe-accent: #ffd400;
+  font-family: "Manrope", "Segoe UI", sans-serif;
+  background:
+    radial-gradient(900px 420px at 0% 0%, rgba(255, 212, 0, 0.1), transparent 50%),
+    #0a0a0a;
+}
+
+body.pe-legal .lg-nav {
+  gap: 10px;
+}
+
+body.pe-legal .lg-brand {
+  font-family: "Archivo Black", Impact, sans-serif;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+}
+body.pe-legal .lg-brand span {
+  color: #ffd400;
+}
+body.pe-legal h1 {
+  font-family: "Archivo Black", Impact, sans-serif;
+  text-transform: uppercase;
+}
+body.pe-legal .lg-nav {
+  border-bottom: 3px solid #ffd400;
+}
+
+body.pe-legal .pe-region {
+  margin-left: auto;
+  font-size: 13px;
+}
+
+body.pe-legal .pe-region select {
+  background: #0c1118;
+  border: 1px solid #1c2633;
+  color: #fff;
+  padding: 8px 10px;
+  font: inherit;
+}
+
+body.pe-legal .lg-toc a[href*="/pe/"] {
+  color: #aab5c5;
+}
+
+.pe-form {
+  display: grid;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.pe-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
+
+.pe-form input,
+.pe-form select,
+.pe-form textarea {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #1c2633;
+  background: #0b1017;
+  color: #f4f7fb;
+  font: inherit;
+  border-radius: 0;
+}
+
+.pe-form textarea {
+  min-height: 140px;
+  resize: vertical;
+}
+
+.pe-form .pe-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.pe-form button {
+  justify-self: start;
+  padding: 12px 18px;
+  border: 0;
+  background: #ffd400;
+  color: #111;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.pe-badge {
+  display: inline-block;
+  margin: 8px 0 0;
+  padding: 8px 12px;
+  border: 2px solid #f5c518;
+  background: #1a1400;
+  color: #ffe08a;
+  font-weight: 800;
+  letter-spacing: 0.5px;
+  text-transform: uppercase;
+  font-size: 12px;
+}
+
+@media (max-width: 640px) {
+  .pe-form .pe-row {
+    grid-template-columns: 1fr;
+  }
+}
