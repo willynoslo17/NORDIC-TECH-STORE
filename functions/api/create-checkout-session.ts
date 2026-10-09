@@ -143,7 +143,13 @@ function json(error: string, status: number, extra: Record<string, unknown> = {}
   return Response.json({ error, ...extra }, { status });
 }
 
+/** Betaling midlertidig stengt. Sett til true for å åpne Stripe Checkout igjen. */
+const CHECKOUT_ENABLED = false;
+
 export async function onRequestPost(context: { request: Request; env: Env }) {
+  if (!CHECKOUT_ENABLED) {
+    return json("Nettbutikken åpner snart. Kontakt oss på kontakt@novverk.no.", 503);
+  }
   if (!context.env.STRIPE_SECRET_KEY?.startsWith("sk_live_")) {
     return json("Live payments are not configured", 503);
   }

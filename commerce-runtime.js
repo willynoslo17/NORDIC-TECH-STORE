@@ -13,6 +13,9 @@
     orders: "orders@novverk.no",
     marketing: "kontakt@novverk.no"
   };
+  /* Betaling midlertidig stengt. Sett til true for å åpne kassen igjen
+     (og CHECKOUT_ENABLED i functions/api/create-checkout-session.ts). */
+  const CHECKOUT_ENABLED = false;
   let started = false;
 
   function read(key, fallback) {
@@ -167,6 +170,13 @@
   function closeInfo() { document.getElementById("nordicInfo").classList.remove("open"); }
 
   function enhanceCheckout() {
+    if (!CHECKOUT_ENABLED) {
+      const trigger = document.querySelector(".drawer .checkout");
+      if (trigger) { trigger.disabled = true; trigger.onclick = null; }
+      const pausedForm = document.getElementById("checkoutForm");
+      if (pausedForm) pausedForm.onsubmit = event => { event.preventDefault(); };
+      return;
+    }
     let form = document.getElementById("checkoutForm");
     if (!form) {
       document.body.insertAdjacentHTML("beforeend", '<div class="nordic-info" id="checkoutModal"><section class="nordic-info-card"><button type="button" id="checkoutClose">Lukk</button><h2>Leveringsopplysninger</h2><form id="checkoutForm" class="formgrid"><input required name="name" placeholder="Fullt navn"><input required type="email" name="email" placeholder="E-post"><input required name="phone" placeholder="Telefon"><input required name="city" placeholder="Sted"><input required class="full" name="address" placeholder="Adresse"><select required name="country" class="full"><option value="Norway">Norge</option><option value="Europe">Europa</option><option value="Peru">Peru</option></select><button class="checkout full" type="submit">GÅ TIL BETALING <span lang="es">/ IR AL PAGO</span></button></form><div id="success" style="display:none"></div></section></div>');
