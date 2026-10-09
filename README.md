@@ -2,7 +2,7 @@
 
 Storefront brand: **Novverk** · https://novverk.no/ · Novverk er et varemerke fra ML Internasjonal. (Repo / Pages project: `NORDIC-TECH-STORE`, formerly "Nordic Tech Store".)
 
-Static international storefront for Norway, Europe and Peru, operated by ML Internasjonal Handel.
+Norsk nettbutikk for teknologi og smarthjem – drevet av ML Internasjonal Handel.
 
 ## Supplier integration layer
 
@@ -29,4 +29,3 @@ The storefront remains in non-charging request mode until supplier stock, landed
 - Printify / Gelato / Printful use the same model as CJ: live API when env keys are set, local `catalog/*-products.json` (empty `[]`) as fallback only.
 - Env: `PRINTIFY_API_TOKEN`, `GELATO_API_KEY`, `PRINTFUL_API_TOKEN` (plus existing `CJ_API_KEY`). See `STRIPE-SETUP.md`.
 - German Drop remains authorized-manual / shared-account only (no fake DE catalog). CJ catalog unchanged.
-
