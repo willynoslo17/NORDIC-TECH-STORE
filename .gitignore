@@ -11,3 +11,5 @@ apps/*/dist/
 apps/*/.env
 apps/*/secrets/*
 !apps/*/secrets/.gitkeep
+!.env.example
+!apps/*/.env.example
