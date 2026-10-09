@@ -3,3 +3,11 @@ node_modules/
 .env
 .env.*
 
+
+# Expo apps
+apps/*/node_modules/
+apps/*/.expo/
+apps/*/dist/
+apps/*/.env
+apps/*/secrets/*
+!apps/*/secrets/.gitkeep
