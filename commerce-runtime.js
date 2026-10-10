@@ -143,7 +143,7 @@
       const notice = document.createElement("p");
       notice.id = "nordicPriceNotice";
       notice.style.cssText = "font-size:12px;line-height:1.5;opacity:.72;margin:0 0 14px";
-      notice.innerHTML = 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre. Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">14 dagers angrerett</a>.';
+      notice.innerHTML = 'Alle priser i NOK er inkl. 25 % MVA. Frakt 79 kr per ordre – gratis over 799 kr. Totalpris vises før betaling. <a href="/frakt-og-levering">Leveringstid</a> · <a href="/angrerett">30 dagers retur</a> · 2 års reklamasjonsrett.';
       grid.parentNode.insertBefore(notice, grid);
     }
     if (!document.querySelector('script[type="application/ld+json"][data-nordic-store]')) {
@@ -199,7 +199,7 @@
     form.dataset.enhanced = "true";
     const button = form.querySelector('[type="submit"]');
     button.textContent = "BETAL SIKKERT MED STRIPE";
-    const summary = '<div class="full notice nordic-precontract">Du sendes til Stripe Checkout for sikker betaling. Selger: '+BRAND+' (Martinez Lozano Internasjonal Handel – se '+'<a href="/kjopsvilkar" target="_blank" rel="noopener">kjøpsvilkår</a>'+'). Totalpris inkl. 25 % MVA og frakt (79 kr) vises før du betaler. Estimert levering 5–20 virkedager. 14 dagers angrerett – du betaler selv returfrakten.</div>';
+    const summary = '<div class="full notice nordic-precontract">Du sendes til Stripe Checkout for sikker betaling. Selger: '+BRAND+' (Martinez Lozano Internasjonal Handel – se '+'<a href="/kjopsvilkar" target="_blank" rel="noopener">kjøpsvilkår</a>'+'). Totalpris inkl. 25 % MVA og frakt (79 kr, gratis over 799 kr) vises før du betaler. Estimert levering 5–20 virkedager. 30 dagers retur – du betaler selv returfrakten. 2 års reklamasjonsrett. Klarna og Vipps kommer snart.</div>';
     const oldNotice = form.querySelector(".notice");
     if (oldNotice) oldNotice.outerHTML = summary; else button.insertAdjacentHTML("beforebegin", summary);
     const L = (href, text) => '<a href="'+href+'" target="_blank" rel="noopener">'+text+'</a>';
@@ -210,7 +210,7 @@
       const items = Object.entries(cartObject()).map(([id, quantity]) => {
         const item = catalogProductById(id) || {};
         /* No prices are sent: the server prices each line from its signed quote or its own catalog. */
-        return { id, ref: String(item.externalId || ""), sku: item.sku || "", name: item.name || item.n || "Product", quantity, provider: item.provider || "", quote: item.quote || "" };
+        return { id, ref: String(item.externalId || ""), sku: item.sku || "", name: item.name || item.n || "Produkt", quantity, provider: item.provider || "", quote: item.quote || "" };
       });
       if (!items.length) return;
       const id = "NORD-" + Date.now().toString(36).toUpperCase();

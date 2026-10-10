@@ -59,8 +59,106 @@
     "stationery": "Papirvarer",
     "accessories": "Tilbehør",
     "home": "Hjem",
-    "phone-cases": "Mobildeksler"
+    "phone-cases": "Mobildeksler",
+    "mobile": "Mobil",
+    "smart home": "Smarthjem",
+    "electronics": "Elektronikk",
+    "audio": "Lyd",
+    "teknologi": "Teknologi"
   };
+
+  /**
+   * Customer-facing Norwegian product titles. Supplier APIs (Printful/CJ/Printify)
+   * often return English names like "Clear Case for iPhone®" — never show those as-is.
+   */
+  function toNorwegianTitle(raw) {
+    let s = String(raw || "").replace(/\s+/g, " ").trim();
+    if (!s) return "Produkt";
+    /* Already mostly Norwegian (latin + æøå / common NO words) and no long English product phrases. */
+    const looksNb = /[æøåÆØÅ]/.test(s) || /\b(deksel|krus|plakat|høyttaler|støvsuger|holder|kabel|stativ|notatbok|hettegenser|t-skjorte|musematte|klistremerke|handlenett)\b/i.test(s);
+    const looksEn = /\b(case|clear|mug|poster|hoodie|tote|notebook|sticker|speaker|vacuum|charger|wireless|phone|accessories|bracket|organizer|compatible|portable|smart home)\b/i.test(s);
+    if (looksNb && !looksEn) return s;
+
+    const phrases = [
+      [/clear case for iphone®?/gi, "Gjennomsiktig deksel til iPhone®"],
+      [/clear case for iphone/gi, "Gjennomsiktig deksel til iPhone"],
+      [/tough case for iphone®?/gi, "Ekstra beskyttende deksel til iPhone®"],
+      [/phone case/gi, "mobildeksel"],
+      [/mobile phone case/gi, "mobildeksel"],
+      [/silicone .*?phone case/gi, "silikonmobildeksel"],
+      [/wireless charger/gi, "trådløs lader"],
+      [/bluetooth speaker/gi, "Bluetooth-høyttaler"],
+      [/portable bluetooth speaker/gi, "portabel Bluetooth-høyttaler"],
+      [/robot(?:ic)? vacuum(?: cleaner)?/gi, "robotstøvsuger"],
+      [/vacuum cleaner/gi, "støvsuger"],
+      [/cable organizer/gi, "kabelorganisering"],
+      [/electronics organizer/gi, "elektronikkoranisator"],
+      [/mouse pad/gi, "musematte"],
+      [/vinyl sticker/gi, "vinylklistremerke"],
+      [/dot-?grid notebook/gi, "prikkemønster-notatbok"],
+      [/organic cotton tote/gi, "handlenett i økologisk bomull"],
+      [/all-over print tote bag/gi, "handlenett med heldekkende trykk"],
+      [/tote bag/gi, "handlenett"],
+      [/circuit logo mug/gi, "kretslogo-krus"],
+      [/circuit pattern mug/gi, "kretsmønster-krus"],
+      [/circuit (?:art )?poster/gi, "kretskunst-plakat"],
+      [/circuit tee/gi, "krets-t-skjorte"],
+      [/circuit hoodie/gi, "krets-hettegenser"],
+      [/fast charging cable/gi, "hurtigladekabel"],
+      [/data cable/gi, "datakabel"],
+      [/phone holder/gi, "telefonholder"],
+      [/mobile phone holder/gi, "telefonholder"],
+      [/phone bracket/gi, "telefonbrakett"],
+      [/phone stand/gi, "telefonstativ"],
+      [/door lock/gi, "dørlås"],
+      [/fingerprint/gi, "fingeravtrykk"],
+      [/surveillance camera/gi, "overvåkingskamera"],
+      [/network camera/gi, "nettverkskamera"],
+      [/smart home/gi, "smarthus"],
+      [/drawing tablet/gi, "tegnebrett"],
+      [/writing board/gi, "skrivetavle"],
+      [/accessories/gi, "tilbehør"],
+      [/compatible with/gi, "kompatibel med"],
+      [/factory direct supply/gi, ""],
+      [/for children'?s toys/gi, "for barn"],
+      [/waterproof/gi, "vanntett"],
+      [/portable/gi, "portabel"],
+      [/wireless/gi, "trådløs"],
+      [/automatic/gi, "automatisk"],
+      [/multi-function/gi, "multifunksjon"],
+      [/universal/gi, "universell"],
+      [/folding/gi, "sammenleggbar"],
+      [/magnetic/gi, "magnetisk"],
+      [/electronics/gi, "elektronikk"],
+      [/household cleaning/gi, "hjemmerengjøring"],
+      [/\bmugs?\b/gi, "krus"],
+      [/\bposters?\b/gi, "plakat"],
+      [/\bnotebooks?\b/gi, "notatbok"],
+      [/\bstickers?\b/gi, "klistremerke"],
+      [/\bhoodies?\b/gi, "hettegenser"],
+      [/\btees?\b/gi, "t-skjorte"],
+      [/\bt-?shirts?\b/gi, "t-skjorte"],
+      [/\bcases?\b/gi, "deksel"],
+      [/\bchargers?\b/gi, "lader"],
+      [/\bspeakers?\b/gi, "høyttaler"],
+      [/\bbrackets?\b/gi, "brakett"],
+      [/\bholders?\b/gi, "holder"],
+      [/\bstands?\b/gi, "stativ"],
+      [/\bcables?\b/gi, "kabel"],
+      [/\bbags?\b/gi, "veske"],
+      [/\bblack\b/gi, "sort"],
+      [/\bwhite\b/gi, "hvit"],
+      [/\bphone\b/gi, "telefon"],
+      [/\bmobile\b/gi, "mobil"],
+      [/printful product/gi, "Printful-produkt"],
+      [/supplier product/gi, "Produkt"]
+    ];
+    for (const [re, rep] of phrases) s = s.replace(re, rep);
+    s = s.replace(/\s{2,}/g, " ").replace(/\s+([,·–—])/g, "$1").replace(/([,·])\s*/g, "$1 ").replace(/^\s+|\s+$/g, "");
+    s = s.replace(/^[,·\-\s]+|[,·\-\s]+$/g, "").replace(/\s{2,}/g, " ").trim();
+    if (!s) return "Produkt";
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  }
   const BRAND_COLORS = {
     cj: "#0f766e",
     printify: "#7c3aed",
@@ -97,7 +195,7 @@
     const out = {
       id: numericId != null ? numericId : baseId + index,
       externalId: String(item.id || item.gelatoProductUid || item.printfulProductId || item.printifyProductId || ""),
-      name: item.name || (LABELS[provider] || "Supplier") + " product",
+      name: toNorwegianTitle(item.name || item.nameNb || ((LABELS[provider] || "Leverandør") + " produkt")),
       cat: item.category || item.cat || category,
       base: nok > 0 ? nok / NOK_PER_EUR : 0,
       priceNok: nok,
