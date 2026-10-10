@@ -12,9 +12,7 @@
     "mode": "authorized-manual-catalog"
   },
   "markets": [
-    "NO",
-    "EU",
-    "PE"
+    "NO"
   ],
   "printify": {
     "enabled": true,

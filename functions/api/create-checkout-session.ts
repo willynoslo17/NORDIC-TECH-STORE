@@ -11,7 +11,7 @@ type Env = { STRIPE_SECRET_KEY?: string; CJ_API_KEY?: string };
 /** Browser cart line. Prices are never read from here, only identifiers and the server-signed quote. */
 type CartItem = { id?: string | number; ref?: string; sku?: string; provider?: string; quantity?: number; quote?: string };
 type CheckoutPayload = {
-  market: "NO" | "EU" | "PE";
+  market: "NO";
   items: CartItem[];
   email: string;
   order_id: string;
@@ -28,20 +28,16 @@ type ResolvedLine = {
   match: string;
 };
 
-/** rate = currency units per EUR (NOK 11.7, the same rate the storefront uses to show EUR/PEN prices). */
+/** rate = currency units per EUR (NOK 11.7, the same rate the storefront uses). Norwegian store only. */
 const markets = {
   NO: { currency: "nok", rate: 11.7, shipping: 79 },
-  EU: { currency: "eur", rate: 1, shipping: 7.9 },
-  PE: { currency: "pen", rate: 4.05, shipping: 14 },
 } as const;
 
-/** Countries Stripe Checkout accepts as shipping destinations: Norway/EEA, EU-27, UK, CH, US, CA and PE (Peru market). */
-const SHIPPING_COUNTRIES = [
-  "NO", "IS", "LI",
-  "AT", "BE", "BG", "HR", "CY", "CZ", "DK", "EE", "FI", "FR", "DE", "GR", "HU", "IE", "IT", "LV",
-  "LT", "LU", "MT", "NL", "PL", "PT", "RO", "SK", "SI", "ES", "SE",
-  "GB", "CH", "US", "CA", "PE",
-];
+/** Free standard shipping when merchandise subtotal (NOK) reaches this threshold. */
+const FREE_SHIP_NOK = 799;
+
+/** Norwegian storefront: deliver to Norway only (Peru canal is a separate future store). */
+const SHIPPING_COUNTRIES = ["NO"];
 
 const PROVIDERS: Provider[] = ["cj", "printify", "gelato", "printful"];
 const MAX_CJ_LOOKUPS = 5;
@@ -158,8 +154,9 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
   try { body = await context.request.json(); }
   catch { return json("Invalid JSON", 400); }
 
-  const market = markets[body?.market];
-  if (!market || !Array.isArray(body.items) || !body.items.length || body.items.length > 30) {
+  if (body?.market !== "NO") return json("Invalid market", 400);
+  const market = markets.NO;
+  if (!Array.isArray(body.items) || !body.items.length || body.items.length > 30) {
     return json("Invalid cart", 400);
   }
   if (typeof body.email !== "string" || !body.email.includes("@")) return json("Invalid email", 400);
@@ -233,9 +230,14 @@ export async function onRequestPost(context: { request: Request; env: Env }) {
     params.set(`line_items[${index}][quantity]`, String(line.quantity));
   });
   const shippingIndex = lines.length;
+  const merchandiseNok = lines.reduce((sum, line) => sum + line.nok * line.quantity, 0);
+  const shippingAmount = merchandiseNok >= FREE_SHIP_NOK ? 0 : Math.round(market.shipping * 100);
   params.set(`line_items[${shippingIndex}][price_data][currency]`, market.currency);
-  params.set(`line_items[${shippingIndex}][price_data][unit_amount]`, String(Math.round(market.shipping * 100)));
-  params.set(`line_items[${shippingIndex}][price_data][product_data][name]`, "Standard shipping");
+  params.set(`line_items[${shippingIndex}][price_data][unit_amount]`, String(shippingAmount));
+  params.set(
+    `line_items[${shippingIndex}][price_data][product_data][name]`,
+    shippingAmount === 0 ? "Gratis frakt" : "Standardfrakt"
+  );
   params.set(`line_items[${shippingIndex}][price_data][product_data][metadata][kind]`, "shipping");
   params.set(`line_items[${shippingIndex}][quantity]`, "1");
 
