@@ -66,7 +66,6 @@
     "audio": "Lyd",
     "teknologi": "Teknologi"
   };
-
   /**
    * Customer-facing Norwegian product titles. Supplier APIs (Printful/CJ/Printify)
    * often return English names like "Clear Case for iPhone®" — never show those as-is.
@@ -75,11 +74,12 @@
     let s = String(raw || "").replace(/\s+/g, " ").trim();
     if (!s) return "Produkt";
     /* Already mostly Norwegian (latin + æøå / common NO words) and no long English product phrases. */
-    const looksNb = /[æøåÆØÅ]/.test(s) || /\b(deksel|krus|plakat|høyttaler|støvsuger|holder|kabel|stativ|notatbok|hettegenser|t-skjorte|musematte|klistremerke|handlenett)\b/i.test(s);
-    const looksEn = /\b(case|clear|mug|poster|hoodie|tote|notebook|sticker|speaker|vacuum|charger|wireless|phone|accessories|bracket|organizer|compatible|portable|smart home)\b/i.test(s);
+    const looksNb = /[æøåÆØÅ]/.test(s) || /\b(deksel|krus|plakat|høyttaler|støvsuger|holder|kabel|stativ|notatbok|hettegenser|t-skjorte|musematte|klistremerke|handlenett|journal|innvendig|omslag)\b/i.test(s);
+    const looksEn = /\b(case|clear|mug|poster|hoodie|tote|notebook|sticker|speaker|vacuum|charger|wireless|phone|accessories|bracket|organizer|compatible|portable|smart home|softcover)\b/i.test(s);
     if (looksNb && !looksEn) return s;
 
     const phrases = [
+      [/softcover journal with inside prints/gi, "Journal med mykt omslag og innvendig trykk"],
       [/clear case for iphone®?/gi, "Gjennomsiktig deksel til iPhone®"],
       [/clear case for iphone/gi, "Gjennomsiktig deksel til iPhone"],
       [/tough case for iphone®?/gi, "Ekstra beskyttende deksel til iPhone®"],
@@ -195,7 +195,7 @@
     const out = {
       id: numericId != null ? numericId : baseId + index,
       externalId: String(item.id || item.gelatoProductUid || item.printfulProductId || item.printifyProductId || ""),
-      name: toNorwegianTitle(item.name || item.nameNb || ((LABELS[provider] || "Leverandør") + " produkt")),
+      name: toNorwegianTitle(item.name || item.nameEn || item.nameNb || ((LABELS[provider] || "Leverandør") + " produkt")),
       cat: item.category || item.cat || category,
       base: nok > 0 ? nok / NOK_PER_EUR : 0,
       priceNok: nok,
@@ -238,7 +238,14 @@
     const timer = setTimeout(() => timeout.abort(), ms || SOURCE_TIMEOUT_MS);
     try {
       const response = await fetch(endpoint, { signal: timeout.signal, cache: "no-store" });
-      if (!response.ok) return [];
+      /* Gelato (and other POD sources) may answer 5xx with products:[]; treat as empty, never break the grid. */
+      if (!response.ok) {
+        try {
+          const payload = await response.json();
+          if (Array.isArray(payload?.products)) return payload.products;
+        } catch (_) {}
+        return [];
+      }
       const payload = await response.json();
       if (Array.isArray(payload.products)) return payload.products;
       if (Array.isArray(payload)) return payload;
