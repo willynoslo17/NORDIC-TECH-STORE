@@ -31,7 +31,7 @@
     "enabled": true,
     "catalogMode": "live-api-primary",
     "catalogFile": "catalog/gelato-products.json",
-    "note": "Live Gelato API via GELATO_API_KEY (store first, then public catalog). Local JSON is empty fallback only — never selected clones.",
+    "note": "Live Gelato API via GELATO_API_KEY (store first, then public catalog). Blank catalog has no images — without a published Gelato e-com store (GELATO_STORE_ID + templates) /api/gelato-products returns 200 + [] and the grid hides Gelato. Local JSON is empty fallback only — never selected clones.",
     "sectorQuery": "electronics"
   },
   "printful": {

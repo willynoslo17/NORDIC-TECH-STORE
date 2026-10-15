@@ -559,6 +559,22 @@ async function loadCatalogProducts(headers: Record<string, string>, sector: stri
   return out.slice(0, 50);
 }
 
+/** Empty Gelato is not an outage — hide quietly with 200 + [] (same rule as Cloudflare handler). */
+function emptyGelato(sector: string, source: string, reason: string, headersOut: Record<string, string>) {
+  return Response.json({
+    ok: true,
+    supplier: "Gelato",
+    sector,
+    query: sector,
+    products: [],
+    count: 0,
+    source,
+    reason,
+    markets: ["NO", "EU", "PE"],
+    compliance: "EU/Nordic POD merch",
+  }, { status: 200, headers: headersOut });
+}
+
 async function onRequestGet(context: any) {
   const url = new URL(context.request.url);
   const wanted = url.searchParams.get("q") || url.searchParams.get("sector") || "";
@@ -566,7 +582,7 @@ async function onRequestGet(context: any) {
   const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
   const apiKey = context.env.GELATO_API_KEY;
   if (!apiKey) {
-    return Response.json({ error: "Gelato is not configured", products: [], supplier: "Gelato", sector, source: "gelato-unconfigured" }, { status: 503, headers: headersOut });
+    return emptyGelato(sector, "gelato-unconfigured", "GELATO_API_KEY missing — Gelato products hidden", headersOut);
   }
   const headers = { "X-API-KEY": String(apiKey), "content-type": "application/json", "User-Agent": "NordicStore/1.0" };
 
@@ -599,6 +615,16 @@ async function onRequestGet(context: any) {
     }
 
     const catalog = await loadCatalogProducts(headers, sector);
+    if (!catalog.length) {
+      return emptyGelato(
+        sector,
+        "gelato-empty",
+        storeId
+          ? "Gelato store/catalog returned no sellable products"
+          : "No Gelato e-commerce store with published templates (blank catalog has no images)",
+        headersOut,
+      );
+    }
     return Response.json({
       ok: true,
       supplier: "Gelato",
@@ -609,15 +635,14 @@ async function onRequestGet(context: any) {
       source: "gelato-live-catalog",
       markets: ["NO", "EU", "PE"],
       compliance: "EU/Nordic POD merch",
-    }, { status: catalog.length ? 200 : 503, headers: headersOut });
+    }, { status: 200, headers: headersOut });
   } catch (error) {
-    return Response.json({
-      error: error instanceof Error ? error.message : "Gelato request failed",
-      products: [],
-      supplier: "Gelato",
+    return emptyGelato(
       sector,
-      source: "gelato-error",
-    }, { status: 502, headers: headersOut });
+      "gelato-error",
+      error instanceof Error ? error.message : "Gelato request failed",
+      headersOut,
+    );
   }
 }
 
