@@ -45,7 +45,8 @@
   /** Gelato (live prices from the Gelato API) loads in the background and may take longer; it never delays readiness. */
   const BACKGROUND_TIMEOUT_MS = 30000;
   const BACKGROUND_SOURCES = ["gelato"];
-  const SOURCE_ORDER = ["cj", "printify", "gelato", "printful"];
+  /* Owner decision 2026-10-17: only the store's real CJ products are shown; Printify/Gelato/Printful (POD merch) are off. */
+  const SOURCE_ORDER = ["cj"];
   /** Customer-facing (Norwegian) names for supplier category values. Per-store overrides: config.catMap. */
   const CAT_NB = {
     "apparel": "Klær",
@@ -285,6 +286,7 @@
   }
 
   async function loadPodCatalog(provider, category, query) {
+    if (!SOURCE_ORDER.includes(provider)) return []; // POD sources disabled: no request, nothing rendered
     const q = encodeURIComponent(podQuery(query || ""));
     const apiItems = await loadApiProducts(ENDPOINTS[provider] + "?q=" + q, BACKGROUND_SOURCES.includes(provider) ? BACKGROUND_TIMEOUT_MS : SOURCE_TIMEOUT_MS);
     if (apiItems.length) {
