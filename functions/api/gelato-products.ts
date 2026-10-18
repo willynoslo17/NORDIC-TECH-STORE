@@ -710,12 +710,33 @@ async function buildGelato(env: any, sector: string) {
   return { products: products.slice(0, 50), diag, source: storeId && products.length && !diag.catalogProducts ? "gelato-live-store" : "gelato-live-catalog" };
 }
 
+/**
+ * Empty Gelato catalogs are not an outage: blank catalog search has no images, and without a
+ * published Gelato e-commerce store (templates → previewUrl) there is nothing sellable to show.
+ * Return 200 + [] so storefronts hide Gelato quietly instead of surfacing /api/gelato-products 503.
+ */
+function emptyGelato(sector: string, source: string, reason: string, diag: Diagnostics = {}, headersOut: Record<string, string>, extra: Record<string, string> = {}) {
+  return Response.json({
+    ok: true,
+    supplier: "Gelato",
+    sector,
+    query: sector,
+    products: [],
+    count: 0,
+    source,
+    reason,
+    diagnostics: diag,
+    markets: ["NO", "EU", "PE"],
+    compliance: "EU/Nordic POD merch",
+  }, { status: 200, headers: { ...headersOut, ...extra } });
+}
+
 export async function onRequestGet(context: any) {
   // Each shop serves its own sector only (a missing or foreign ?q= used to fall back to "beauty").
   const sector = STORE.sector;
   const headersOut = { "access-control-allow-origin": "*", "cache-control": "public, max-age=300" };
   if (!context.env.GELATO_API_KEY) {
-    return Response.json({ error: "Gelato is not configured", products: [], supplier: "Gelato", sector, source: "gelato-unconfigured" }, { status: 503, headers: headersOut });
+    return emptyGelato(sector, "gelato-unconfigured", "GELATO_API_KEY missing — Gelato products hidden", {}, headersOut);
   }
   const origin = new URL(context.request.url).origin;
   const key = `${origin}/__cache/gelato-products/v3?sector=${encodeURIComponent(sector)}`;
@@ -748,6 +769,12 @@ export async function onRequestGet(context: any) {
     }
     const { products, diag, source } = value!.payload;
     const priced = await withQuotes(context.env, "gelato", products, gelatoIds);
+    if (!priced.length) {
+      const reason = diag?.storeIdFromEnv || diag?.stores
+        ? "Gelato store/catalog returned no products with both image and cost"
+        : "No Gelato e-commerce store with published templates (blank catalog has no images)";
+      return emptyGelato(sector, source || "gelato-empty", reason, diag || {}, headersOut, { "x-catalog-cache": state });
+    }
     return Response.json({
       ok: true,
       supplier: "Gelato",
@@ -759,14 +786,15 @@ export async function onRequestGet(context: any) {
       diagnostics: diag,
       markets: ["NO", "EU", "PE"],
       compliance: "EU/Nordic POD merch",
-    }, { status: priced.length ? 200 : 503, headers: { ...headersOut, "x-catalog-cache": state } });
+    }, { status: 200, headers: { ...headersOut, "x-catalog-cache": state } });
   } catch (error) {
-    return Response.json({
-      error: error instanceof Error ? error.message : "Gelato request failed",
-      products: [],
-      supplier: "Gelato",
+    // Transient Gelato failures: hide products, do not fail the storefront grid.
+    return emptyGelato(
       sector,
-      source: "gelato-error",
-    }, { status: 502, headers: headersOut });
+      "gelato-error",
+      error instanceof Error ? error.message : "Gelato request failed",
+      {},
+      headersOut,
+    );
   }
 }

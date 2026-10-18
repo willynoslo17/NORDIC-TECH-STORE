@@ -142,9 +142,22 @@ function authHeaders(token?: string, storeId?: string) {
   return headers;
 }
 
+/** Exact English Printful catalog titles → Norwegian (storefront). */
+const NAME_NB: Record<string, string> = {
+  "softcover journal with inside prints": "Journal med mykt omslag og innvendig trykk",
+};
+
+function norwegianName(raw: string) {
+  const name = String(raw || "").trim();
+  if (!name) return "Printful product";
+  if (/[æøåÆØÅ]/.test(name)) return name;
+  return NAME_NB[name.toLowerCase()] || name;
+}
+
 function normalizeCatalog(row: any, index: number, sector: string, costHint = 0, variantId = "") {
   const cost = money(costHint);
   const retail = cost > 0 ? money(cost * (TYPE_MARKUP.default || 2.35)) : 0;
+  const english = String(row?.title || row?.name || row?.nameEn || "Printful product");
   return {
     id: String(row?.id || `printful-catalog-${index}`),
     sku: `PFL-${row?.id || index}`,
@@ -155,7 +168,8 @@ function normalizeCatalog(row: any, index: number, sector: string, costHint = 0,
     printfulVariantId: String(variantId || ""),
     printfulSyncVariantId: "",
     printfulSource: "catalog",
-    name: String(row?.title || row?.name || "Printful product"),
+    name: norwegianName(english),
+    nameEn: english,
     category: String(row?.type_name || row?.type || sector),
     brand: String(row?.brand || "Printful"),
     supplierPriceUsd: cost || retail,
@@ -318,7 +332,10 @@ export async function onRequestGet(context: any) {
       const result = await Promise.race([refreshing, sleep(LIVE_WAIT_MS).then(() => null)]);
       if (result && result.length) { fresh = result; source = "printful-live-catalog"; }
     }
-    const rows = mergeRows(fresh, memoryGood?.rows || good?.rows || [], SNAPSHOT);
+    const rows = mergeRows(fresh, memoryGood?.rows || good?.rows || [], SNAPSHOT).map((row) => ({
+      ...row,
+      name: norwegianName(String(row?.name || row?.nameEn || row?.title || "Printful product")),
+    }));
     return Response.json({
       ok: true,
       supplier: "Printful",
