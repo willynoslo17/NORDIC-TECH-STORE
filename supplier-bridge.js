@@ -39,6 +39,10 @@
     printful: "catalog/printful-products.json"
   };
   const ID_BASE = { cj: 10001, printify: 20001, gelato: 30001, printful: 40001 };
+  /** Customer-facing text never includes a sourcing brand. */
+  function stripSupplierWords(value) {
+    return String(value || "").replace(/\b(cj(?:\s*dropshipping)?|printify|gelato|printful|dropi)\b/gi, " ").replace(/\s{2,}/g, " ").trim();
+  }
   const LABELS = { cj: "CJ", printify: "Printify", gelato: "Gelato", printful: "Printful" };
   /** A slow supplier endpoint never blocks the grid: after this many ms its local fallback is used instead. */
   const SOURCE_TIMEOUT_MS = 8000;
@@ -201,7 +205,7 @@
       base: nok > 0 ? nok / NOK_PER_EUR : 0,
       priceNok: nok,
       v: "v" + ((index % 4) + 1),
-      tag: LABELS[provider] || provider,
+      tag: stripSupplierWords(item.category || item.cat || category) || category,
       brand: item.brand || LABELS[provider] || provider,
       image: item.image || "",
       sku: item.sku || "",
